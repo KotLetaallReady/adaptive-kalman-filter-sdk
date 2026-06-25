@@ -11,12 +11,15 @@ import com.katka.engine.neural.NeuralNetwork
  *
  * @param network Trained neural network that predicts the blend weight.
  * @param normalizer Feature normalizer fitted on the same data as [network].
+ * @param config Smoother parameters. Use the same config that was used while
+ * collecting the training dataset for [network].
  */
 class NeuralTrajectorySmoother(
     private val network: NeuralNetwork,
-    private val normalizer: FeatureNormalizer
+    private val normalizer: FeatureNormalizer,
+    val config: SmootherConfig = SmootherConfig()
 ) {
-    private val window = SmootherWindow()
+    private val window = SmootherWindow(config)
 
     /** Clears the internal window so the next [push] starts a new sequence. */
     fun reset() = window.clear()

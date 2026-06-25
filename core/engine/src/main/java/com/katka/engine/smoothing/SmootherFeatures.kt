@@ -9,14 +9,17 @@ import kotlin.math.sqrt
 /** Internal feature extractor used by training and inference for the neural smoother. */
 internal object SmootherFeatures {
 
-    const val L = 11
-    const val HALF = 5
-    const val COUNT = 6
+    const val COUNT = SmootherConfig.FEATURE_COUNT
 
-    private const val TURN_THRESHOLD_DEG = 30.0
+    /** Extracts the raw, un-normalised feature vector from a full window. */
+    fun extract(
+        window: List<SmootherInput>,
+        config: SmootherConfig = SmootherConfig()
+    ): DoubleArray {
+        require(window.size == config.windowLength) {
+            "SmootherFeatures.extract expects a full ${config.windowLength}-point window."
+        }
 
-    /** Extracts the raw (un-normalised) 6-feature vector from a full window. */
-    fun extract(window: List<SmootherInput>): DoubleArray {
         val innov = window.map { it.innovationMag }
         val f1 = innov.average()
         val f2 = std(innov, f1)
@@ -28,11 +31,14 @@ internal object SmootherFeatures {
         return doubleArrayOf(f1, f2, f3, f4, f5, f6)
     }
 
-    /** Total turn angle (deg) over segments steeper than 30°, used to suppress alpha on sharp turns. */
-    fun suppressionAngleDeg(window: List<SmootherInput>): Double =
-        turnAnglesDeg(window).filter { it > TURN_THRESHOLD_DEG }.sum()
+    /** Total turn angle in degrees over segments steeper than the configured threshold. */
+    fun suppressionAngleDeg(
+        window: List<SmootherInput>,
+        config: SmootherConfig = SmootherConfig()
+    ): Double =
+        turnAnglesDeg(window).filter { it > config.turnThresholdDeg }.sum()
 
-    /** Absolute turn angles (deg) between consecutive Kalman-track segments. */
+    /** Absolute turn angles in degrees between consecutive Kalman-track segments. */
     private fun turnAnglesDeg(window: List<SmootherInput>): List<Double> {
         if (window.size < 3) return emptyList()
 

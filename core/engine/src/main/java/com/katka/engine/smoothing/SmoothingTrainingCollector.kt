@@ -21,10 +21,15 @@ data class SmoothingDataset(
  * available, the collector estimates the target blend weight and stores the raw
  * feature row. Call [buildDataset] after recording to fit the normalizer and
  * produce samples ready for [NeuralNetworkTrainer].
+ *
+ * @param config Smoother parameters used to build windows and target alpha
+ * labels. Use the same config during inference.
  */
-class SmoothingTrainingCollector {
+class SmoothingTrainingCollector(
+    val config: SmootherConfig = SmootherConfig()
+) {
 
-    private val window = SmootherWindow()
+    private val window = SmootherWindow(config)
     private val rawFeatureRows = mutableListOf<DoubleArray>()
     private val alphaStars = mutableListOf<Double>()
 
@@ -43,7 +48,7 @@ class SmoothingTrainingCollector {
         val phi = window.turnSuppressionPhiDeg()
 
         rawFeatureRows.add(window.rawFeatures())
-        alphaStars.add(OptimalAlpha.solve(xKf, xSg, xStar, phi))
+        alphaStars.add(OptimalAlpha.solve(xKf, xSg, xStar, phi, config))
     }
 
     /** Clears collected windows and training rows. */
@@ -53,7 +58,7 @@ class SmoothingTrainingCollector {
         alphaStars.clear()
     }
 
-    /** Fits the normaliser over all collected rows and returns the normalised dataset. */
+    /** Fits the normalizer over all collected rows and returns the normalized dataset. */
     fun buildDataset(): SmoothingDataset {
         require(rawFeatureRows.isNotEmpty()) { "buildDataset: no samples collected" }
         val normalizer = FeatureNormalizer.fit(rawFeatureRows)

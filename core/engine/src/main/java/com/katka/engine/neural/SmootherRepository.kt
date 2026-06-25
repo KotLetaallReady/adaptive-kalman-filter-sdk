@@ -1,5 +1,7 @@
 package com.katka.engine.neural
 
+import com.katka.engine.smoothing.SmootherConfig
+
 /**
  * Repository for a persisted neural smoother model.
  *
@@ -14,9 +16,14 @@ class SmootherRepository(private val store: SmootherStore) {
     /** Restores the trained model, or null if absent or corrupt. */
     fun load(): LoadedSmoother? = store.load()?.let { SmootherCodec.decode(it) }
 
-    /** Serialises and persists the network together with its feature normalisation. */
-    fun save(network: NeuralNetwork, featureMean: DoubleArray, featureStd: DoubleArray) {
-        store.save(SmootherCodec.encode(network, featureMean, featureStd))
+    /** Serialises and persists the network together with its feature normalisation and smoother config. */
+    fun save(
+        network: NeuralNetwork,
+        featureMean: DoubleArray,
+        featureStd: DoubleArray,
+        smootherConfig: SmootherConfig = SmootherConfig()
+    ) {
+        store.save(SmootherCodec.encode(network, featureMean, featureStd, smootherConfig))
     }
 
     /** Deletes the persisted model. */

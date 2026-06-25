@@ -1,6 +1,7 @@
 package com.katka.engine.neural
 
 import com.katka.engine.smoothing.NeuralTrajectorySmoother
+import com.katka.engine.smoothing.SmootherConfig
 import kotlin.math.exp
 import kotlin.math.sqrt
 import kotlin.random.Random
@@ -126,7 +127,7 @@ data class NetworkConfig(
     companion object {
         /** Default smoother topology: 6 -> 8 -> 4 -> 1 with a sigmoid output. */
         fun default() = NetworkConfig(
-            inputSize = 6,
+            inputSize = SmootherConfig.FEATURE_COUNT,
             hiddenSizes = listOf(8, 4),
             outputSize = 1,
             outputActivation = OutputActivation.SIGMOID

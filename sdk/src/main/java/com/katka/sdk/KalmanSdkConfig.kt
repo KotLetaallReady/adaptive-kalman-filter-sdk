@@ -1,5 +1,7 @@
 package com.katka.sdk
 
+import com.katka.engine.smoothing.SmootherConfig
+
 /**
  * Runtime configuration for the default Android Kalman SDK setup.
  */
@@ -12,6 +14,7 @@ data class KalmanSdkConfig(
     val adaptiveR: Boolean = false,
     val adaptiveWindow: Int = 20,
     val forgettingB: Double = 0.97,
+    val smootherConfig: SmootherConfig = SmootherConfig(),
     val smootherModelFileName: String = "neural_smoother.model",
     val logcatTag: String = "KalmanLog"
 ) {

@@ -1,5 +1,6 @@
 package com.katka.engine.neural
 
+import com.katka.engine.smoothing.SmootherConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -20,7 +21,7 @@ class NeuralNetworkTest {
         val net = NeuralNetwork(NetworkConfig.default())
         val rnd = Random(7)
         repeat(50) {
-            val f = DoubleArray(6) { rnd.nextGaussian() * 100.0 } // deliberately large
+            val f = DoubleArray(SmootherConfig.FEATURE_COUNT) { rnd.nextGaussian() * 100.0 } // deliberately large
             val y = net.predict(f)
             assertEquals(1, y.size)
             assertTrue("output ${y[0]} must be > 0", y[0] > 0.0)
@@ -33,7 +34,7 @@ class NeuralNetworkTest {
         // Target α* = σ(2·f0 − 1.5·f1): a smooth function the MLP can fit.
         val rnd = Random(11)
         val samples = (0 until 200).map {
-            val f = DoubleArray(6) { rnd.nextGaussian() }
+            val f = DoubleArray(SmootherConfig.FEATURE_COUNT) { rnd.nextGaussian() }
             val target = 1.0 / (1.0 + exp(-(2.0 * f[0] - 1.5 * f[1])))
             TrainingSample(f, doubleArrayOf(target))
         }

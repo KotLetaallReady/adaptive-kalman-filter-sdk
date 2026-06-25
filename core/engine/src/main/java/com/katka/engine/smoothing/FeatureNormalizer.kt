@@ -48,7 +48,7 @@ class FeatureNormalizer(
         }
 
         /** Identity transform (mean 0, std 1). */
-        fun identity(n: Int = 6) =
+        fun identity(n: Int = SmootherConfig.FEATURE_COUNT) =
             FeatureNormalizer(DoubleArray(n) { 0.0 }, DoubleArray(n) { 1.0 })
     }
 }

@@ -7,12 +7,16 @@ internal object OptimalAlpha {
 
     private const val DEGENERATE_EPS = 1e-9
 
-    /** Returns alpha* = clip(d·e/|d|^2, 0, 1) with turn-angle suppression; 0.5 when the correction direction is undefined. */
+    /**
+     * Returns alpha* = clip(d*e/|d|^2, 0, 1) with configurable turn-angle
+     * suppression; returns 0.5 when the correction direction is undefined.
+     */
     fun solve(
         xKf: DoubleArray,
         xSg: DoubleArray,
         xStar: DoubleArray,
-        turnAngleDeg: Double
+        turnAngleDeg: Double,
+        config: SmootherConfig = SmootherConfig()
     ): Double {
         val dx = xSg[0] - xKf[0]
         val dy = xSg[1] - xKf[1]
@@ -26,7 +30,8 @@ internal object OptimalAlpha {
             ((dx * ex + dy * ey) / dNorm2).coerceIn(0.0, 1.0)
         }
 
-        val suppression = (1.0 - turnAngleDeg / 60.0).coerceAtLeast(0.05)
+        val suppression = (1.0 - turnAngleDeg / config.alphaSuppressionTurnDeg)
+            .coerceAtLeast(config.minTurnSuppression)
         alpha *= suppression
         return alpha.coerceIn(0.0, 1.0)
     }
