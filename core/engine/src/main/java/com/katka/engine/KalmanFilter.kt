@@ -15,6 +15,11 @@ import kotlin.math.cos
  * projected into that local frame, processed with a constant-velocity model
  * and can then be converted back to latitude/longitude.
  *
+ * Fixes whose innovation exceeds the outlier gate are skipped, but only up to
+ * [GATE_RECOVERY_REJECTIONS] in a row: the next one is accepted, so a filter
+ * that has fallen behind the real position catches up instead of rejecting
+ * every later fix.
+ *
  * @param processNoiseStd Standard deviation of the process noise used in the
  * prediction step. Larger values make the filter adapt faster but smooth less.
  * @param useWallClockTime When `true`, the time step is cross-checked against
@@ -29,6 +34,7 @@ class KalmanFilter(
     private var state: KalmanState? = null
     private var lastTimestamp: Long = -1L
     private var lastWallClockMs: Long = -1L
+    private var consecutiveRejections = 0
 
     /** Latitude of the first accepted GPS fix, used as the local coordinate origin. */
     var refLat: Double = 0.0
@@ -51,6 +57,7 @@ class KalmanFilter(
         state = null
         lastTimestamp   = -1L
         lastWallClockMs = -1L
+        consecutiveRejections = 0
         refLat = 0.0
         refLon = 0.0
         strategy?.reset()
@@ -112,7 +119,8 @@ class KalmanFilter(
 
         val gateThreshold = (xPred.positionUncertaintyMeters * 5.0).coerceIn(15.0, 80.0)
 
-        if (innovationMag > gateThreshold) {
+        if (innovationMag > gateThreshold && consecutiveRejections < GATE_RECOVERY_REJECTIONS) {
+            consecutiveRejections++
             state = xPred
             val zeroK = MatrixOps.zeros(KalmanState.DIM, 2)
             val Rgate = MatrixOps.diagonal(doubleArrayOf(
@@ -134,6 +142,8 @@ class KalmanFilter(
                 dt                = dt
             )
         }
+
+        consecutiveRejections = 0
 
         val gainResult = strategy.computeGain(PPred, H, obs)
         val K = gainResult.K
@@ -201,6 +211,7 @@ class KalmanFilter(
         refLat = obs.latitude
         refLon = obs.longitude
         lastTimestamp = obs.timestamp
+        consecutiveRejections = 0
 
         val posVariance = (obs.accuracy * obs.accuracy).toDouble().coerceAtLeast(1.0)
         val initState = KalmanState.initial(x = 0.0, y = 0.0, posVariance = posVariance)
@@ -275,7 +286,10 @@ class KalmanFilter(
         return xPred to PPred
     }
 
-    private companion object {
-        const val EARTH_RADIUS_M = 6_371_000.0
+    companion object {
+        private const val EARTH_RADIUS_M = 6_371_000.0
+
+        /** Gated fixes skipped in a row before the next one is accepted anyway. */
+        const val GATE_RECOVERY_REJECTIONS = 3
     }
 }
