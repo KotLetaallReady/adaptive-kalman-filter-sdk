@@ -56,6 +56,10 @@ core:engine
 core:android
   Android adapters: AndroidSensorDataSource, AndroidLogger,
   FileSmootherStore and required Android manifest permissions.
+
+benchmarks
+  Research benchmarks, not published: a GPS and phone-sensor simulator,
+  EKF/UKF and RTS competitors, result tables and CSV exports.
 ```
 
 Only `adaptive-kalman-filter-sdk` and `core:android` depend on Android. The algorithmic engine is reusable without Android through `core:engine`, `core:data` and `core:model`.
@@ -209,6 +213,22 @@ For a recorded route, pass `useWallClockTime = false`: the filter then takes the
 - `MetricsEvaluator` - trajectory quality metrics; points are paired by timestamp (`TimedPosition`), so a delayed smoother is scored correctly.
 - `NeuralTrajectorySmoother`, `SmoothingTrainingCollector`, `SmootherRepository` - optional neural smoothing pipeline.
 
+### Benchmarks
+
+The `benchmarks` module compares the engine with other filters on synthetic routes: a pedestrian and a bike, with white GPS noise, realistic noise (slow drift, multipath jumps, dropouts) and a phone that underestimates its accuracy in the city. Every method is tuned on 20 routes and tested on 40 others. It needs only a JDK, no Android SDK.
+
+```bash
+./gradlew :benchmarks:run
+```
+
+Without arguments it runs every table; pass names to run a part, and `help` for the list:
+
+```bash
+./gradlew :benchmarks:run --args="stage1 summary"
+```
+
+Results go to `benchmarks/build/results/`: `<experiment>.txt` with the tables and `<experiment>.csv` with every metric in long form (`table, scenario, method, lag_s, metric, value, params`). `--args="export"` also writes point-by-point tracks for plots and the whole synthetic dataset. All numbers come from simulated data and still need checking on real phone logs.
+
 ### Diploma Materials
 
 - `Диплом.dock` is the scientific basis for the diploma work.
@@ -286,6 +306,10 @@ core:engine
 core:android
   Android-адаптеры: AndroidSensorDataSource, AndroidLogger,
   FileSmootherStore и нужные Android manifest permissions.
+
+benchmarks
+  Исследовательские бенчмарки, не публикуются: симулятор GPS и сенсоров
+  телефона, конкуренты EKF/UKF и RTS, таблицы результатов и выгрузка CSV.
 ```
 
 Только `adaptive-kalman-filter-sdk` и `core:android` зависят от Android. Алгоритмическое ядро можно использовать без Android через `core:engine`, `core:data` и `core:model`.
@@ -438,6 +462,22 @@ val kalmanSdk = AdaptiveKalmanFilterSdk.create(
 - `ClassicalCoefficientStrategy` - стандартная адаптивная стратегия шума измерений.
 - `MetricsEvaluator` - метрики качества траектории; точки сопоставляются по timestamp (`TimedPosition`), поэтому сглаживатель с задержкой оценивается правильно.
 - `NeuralTrajectorySmoother`, `SmoothingTrainingCollector`, `SmootherRepository` - нейросетевая pipeline сглаживания.
+
+### Бенчмарки
+
+Модуль `benchmarks` сравнивает движок с другими фильтрами на синтетических маршрутах: пешеход и велосипед, белый шум GPS, реалистичный шум (медленный дрейф, скачки из-за многолучёвости, пропуски) и телефон, который в городе занижает свою погрешность. Параметры каждого метода подбираются на 20 маршрутах, проверка — на 40 других. Нужен только JDK, Android SDK не требуется.
+
+```bash
+./gradlew :benchmarks:run
+```
+
+Без аргументов считаются все таблицы. Чтобы запустить часть, перечислите имена; список выводит `help`:
+
+```bash
+./gradlew :benchmarks:run --args="stage1 summary"
+```
+
+Результаты пишутся в `benchmarks/build/results/`: `<эксперимент>.txt` с таблицами и `<эксперимент>.csv` со всеми метриками в длинном формате (`table, scenario, method, lag_s, metric, value, params`). `--args="export"` дополнительно выгружает треки по точкам для графиков и весь синтетический датасет. Все цифры получены на симуляции, их ещё нужно проверить на реальных записях с телефона.
 
 ### Дипломные Материалы
 
