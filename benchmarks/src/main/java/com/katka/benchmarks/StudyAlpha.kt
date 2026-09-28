@@ -5,7 +5,7 @@ import com.katka.engine.smoothing.SmootherConfig
 import kotlin.math.max
 import kotlin.math.min
 
-// HANDOFF §5.1: position only, the SDK neural α-smoother against KF, UKF and RTS.
+// Position only: the SDK neural α-smoother against KF, UKF and RTS.
 
 private const val HEADER = "%-34s %4s %6s %6s %6s %6s %6s %6s %7s %7s %7s"
 private const val ROW = "%-34s %3dс %6.2f %6.2f %6.2f %6.2f %6.2f %6.2f %+6.1f%% %4d/%-2d %7s"
@@ -92,7 +92,7 @@ fun baseline(sc: Scenario, out: Results): String {
     for ((m, name) in listOf(mOld to "KF+NN, SDK до исправления", mFix to "KF+NN, SDK после исправл.", mRtsRaw to "RTS+NN, метки SG(raw)", mRtsTruth to "RTS+NN, метки от истины"))
         out.add("baseline", sc.label, name, lag, "mean_alpha_label", m.meanLabel, params)
     return buildString {
-        appendLine().appendLine("=== §5.1 исходная постановка · ${sc.label}  (train 20×600 с, test 40×600 с) ===")
+        appendLine().appendLine("=== исходная постановка · ${sc.label}  (train 20×600 с, test 40×600 с) ===")
         appendLine("подбор: KF q=$qKf, RTS q=$qRts, UKF σa/σω=$ukfP")
         appendLine("средняя метка α: SDK до=${fmt("%.2f", mOld.meanLabel)}, SDK после=${fmt("%.2f", mFix.meanLabel)}, " +
             "RTS SG(raw)=${fmt("%.2f", mRtsRaw.meanLabel)}, RTS истина=${fmt("%.2f", mRtsTruth.meanLabel)}")
@@ -173,7 +173,7 @@ fun window(sc: Scenario, out: Results): String {
     for (L in windows) for (s in stats.getValue(L)) out.addStats("window", sc.label, s, "L=$L; $params")
 
     return buildString {
-        appendLine().appendLine("=== §5.1 размер окна L · ${sc.label} (KF q=$qKf, RTS q=$qRts) ===")
+        appendLine().appendLine("=== размер окна L · ${sc.label} (KF q=$qKf, RTS q=$qRts) ===")
         appendLine(fmt("%3s %4s | %-24s | %-6s | %-24s | %-6s", "L", "лаг", "KF+SG α=1: всё/прям/пов", "KF+NN", "RTS: всё/прям/пов", "RTS+NN"))
         for (L in windows) {
             val s = stats.getValue(L)
@@ -197,7 +197,7 @@ fun lossCheck(sc: Scenario, out: Results): String {
     val sgRmse = trainRmse(testKf.map { (t, tr) -> t to sgTrack(tr, cfg) })
     out.add("loss", sc.label, "KF+SG α=1 (без сети)", cfg.halfWindow, "rmse", sgRmse, "q=$q")
     return buildString {
-        appendLine().appendLine("=== §5.1 сеть поверх KF, L=11 · ${sc.label} ===")
+        appendLine().appendLine("=== сеть поверх KF, L=11 · ${sc.label} ===")
         appendLine("  KF+SG α=1 (без сети):             RMSE ${fmt("%.2f", sgRmse)}")
         for ((name, pipe) in listOf(
             "метки SG(raw), обычный loss (SDK)" to Pipe(Base.KF, Labels.SG_RAW, false, false, cfg),
@@ -233,7 +233,6 @@ fun leaderboard(sc: Scenario, out: Results): String {
     val qKfNn = kfQ(nnR); val qKfOr = kfQ(oracleR)
     val qRts = rtsQ(accuracyR); val qRtsNn = rtsQ(nnR); val qRtsOr = rtsQ(oracleR)
 
-    // turn models and thresholds, tuned on train, for both RTS bases
     val thrGrid = listOf(15.0, 30.0, 45.0, 60.0, 90.0, 1e9)
     fun turnSetup(rFn: RModel, q: Double): Triple<Double, Model, Double> {
         val set = train.map { (t, o) -> val tr = runKfR(o, q, rFn); Triple(t, tr, rtsEngine(tr, lag) as Array<DoubleArray?>?) }
@@ -277,7 +276,7 @@ fun leaderboard(sc: Scenario, out: Results): String {
         "turn threshold: rule=${thr(thrRule)} NN=${thr(thrNn)} rule+NNnoise=${thr(thrRuleNn)} NN+NNnoise=${thr(thrNnNn)}"
     out.addTable("leaderboard", sc, stats, ref, params)
     return buildString {
-        appendLine().appendLine("=== §5.1 сводная таблица без Doppler · ${sc.label} ===")
+        appendLine().appendLine("=== сводная таблица без Doppler · ${sc.label} ===")
         appendLine("подбор q: KF=$qKf SH=$qSh KF+NN=$qKfNn KF+ideal=$qKfOr | RTS=$qRts RTS+NN=$qRtsNn RTS+ideal=$qRtsOr | UKF=$ukfP")
         appendLine("порог поворота: правило=${thr(thrRule)}, NN=${thr(thrNn)}; с NN-шумом: правило=${thr(thrRuleNn)}, NN=${thr(thrNnNn)}")
         statsTable(stats, ref)
@@ -311,7 +310,7 @@ fun noiseInput(sc: Scenario, out: Results): String {
     }
     stats.forEachIndexed { i, s -> out.addStats("noise-input", sc.label, s, "q=${if (i % 2 == 0) qs[i / 2].first else qs[i / 2].second}") }
     return buildString {
-        appendLine().appendLine("=== §5.3 где сеть оценивает шум (без Doppler) · ${sc.label} ===")
+        appendLine().appendLine("=== где сеть оценивает шум (без Doppler) · ${sc.label} ===")
         appendLine(fmt("%-44s %4s %6s %6s %6s %6s %6s", "метод", "лаг", "RMSE", "прямо", "поворт", "стоп", "дрожь"))
         for (i in listOf(0, 2, 4, 6, 1, 3, 5, 7)) {
             val s = stats[i]
@@ -356,7 +355,7 @@ fun noiseTeacher(sc: Scenario, out: Results): String {
         out.addStats("noise-teacher", sc.label, rt[i], "q=${qs[i].second}")
     }
     return buildString {
-        appendLine().appendLine("=== §5.3 обучение оценщика шума без истины (без Doppler) · ${sc.label} ===")
+        appendLine().appendLine("=== обучение оценщика шума без истины (без Doppler) · ${sc.label} ===")
         appendLine(fmt("%-36s | %-18s | %-18s", "как получен R", "KF (0 с): RMSE", "RTS (5 с): RMSE"))
         for (i in variants.indices) {
             appendLine(fmt("%-36s | %6.2f  %+6.1f%%   | %6.2f  %+6.1f%%", variants[i].first,

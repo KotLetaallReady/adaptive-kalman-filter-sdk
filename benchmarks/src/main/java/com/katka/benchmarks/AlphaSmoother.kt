@@ -72,10 +72,8 @@ internal fun apply(tr: KfTrace, rts: Array<DoubleArray?>?, m: Model): Track {
     return out
 }
 
-/** The shipped SDK inference path, used for the KF-based rows. */
 fun nnRun(tr: KfTrace, m: Model): Track = nnRunAlphas(tr, m).first
 
-/** SDK inference path, also returning every alpha the network produced. */
 internal fun nnRunAlphas(tr: KfTrace, m: Model): Pair<Track, List<Double>> {
     val sm = NeuralTrajectorySmoother(m.net, m.norm, m.pipe.cfg)
     val out = HashMap<Long, V2>(); val alphas = ArrayList<Double>()
@@ -106,7 +104,6 @@ fun describe(alphas: List<Double>): String {
         s.average(), q(0.1), q(0.5), q(0.9), 100 * s.count { it > 0.9 } / s.size)
 }
 
-/** Sum of velocity-heading turn angles inside the window (feature #3 of the fixed SDK). */
 internal fun turnDeg(w: SmootherWindow) = w.rawFeatures()[2]
 
 /** SG only where the window turns more than [thresholdDeg]; α from [nn] there, or 1 without a network. */

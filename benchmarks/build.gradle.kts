@@ -5,16 +5,12 @@ plugins {
     application
 }
 
-// Research benchmarks for the engine: a synthetic GPS/phone-sensor simulator,
-// competitor filters (EKF/UKF, RTS, robust smoothers) and the tables from
-// kalman-research/HANDOFF.md. Not published.
 dependencies {
     implementation(project(":core:engine"))
     testImplementation(libs.junit)
 }
 
-// The benchmarks drive engine internals (MatrixOps, SmootherWindow, OptimalAlpha)
-// the same way the engine's own tests do, without making them public API.
+// Friend of :core:engine, like its tests: uses engine internals without making them public API.
 val engine = project(":core:engine")
 tasks.withType<KotlinCompile>().configureEach {
     friendPaths.from(

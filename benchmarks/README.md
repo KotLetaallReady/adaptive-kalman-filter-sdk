@@ -21,23 +21,23 @@ Output: `benchmarks/build/results/<experiment>.txt` (tables) and `<experiment>.c
 
 ## Experiments
 
-| Name | HANDOFF | What it answers |
-|---|---|---|
-| `baseline` | §5.1 | KF vs UKF-CTRV, the SDK α-smoother before and after the turn fix, SG, RTS, oracle α (position only) |
-| `turns` | §5.1 | How often turn suppression fires on straight legs, turns and stops |
-| `window` | §5.1 | Window length L for SG, the α-smoother and RTS |
-| `loss` | §5.1 | Labels and loss weighting of the α-network |
-| `leaderboard` | §5.1 | Noise network and "SG only on turns" on top of KF and RTS |
-| `noise-input`, `noise-teacher` | §5.3 | Noise estimator inputs and teachers without ground truth (no Doppler) |
-| `stage1` | §5.2 | KF / EKF / UKF + RTS with position, + Doppler, + gyro |
-| `stage2` | §5.3 | ZUPT rules and classifier, EM calibration, self-trained noise network on KF-CV + Doppler |
-| `stage3` | §5.4 | Training on a mix of situations; truth-free acceptance by innovation NLL |
-| `stage4` | §5.5 | Robust RTS (IRLS, Huber / Cauchy), online Huber update, robust teacher |
-| `gate` | step 1 | Track loss by the outlier gate on all 60 routes |
-| `summary` | §5.6 | Best scheme for real time, a 5 s route line and a finished track, against the SDK as it ships |
-| `tracks` | — | First test route of each scenario, point by point, for plots |
-| `dataset` | — | Every route with truth and all sensors, e.g. for KalmanNet in PyTorch |
+| Name | What it answers |
+|---|---|
+| `baseline` | KF vs UKF-CTRV, the SDK α-smoother before and after the turn fix, SG, RTS, oracle α (position only) |
+| `turns` | How often turn suppression fires on straight legs, turns and stops |
+| `window` | Window length L for SG, the α-smoother and RTS |
+| `loss` | Labels and loss weighting of the α-network |
+| `leaderboard` | Noise network and "SG only on turns" on top of KF and RTS |
+| `noise-input`, `noise-teacher` | Noise estimator inputs and teachers without ground truth (no Doppler) |
+| `stage1` | KF / EKF / UKF + RTS with position, + Doppler, + gyro |
+| `stage2` | ZUPT rules and classifier, EM calibration, self-trained noise network on KF-CV + Doppler |
+| `stage3` | Training on a mix of situations; truth-free acceptance by innovation NLL |
+| `stage4` | Robust RTS (IRLS, Huber / Cauchy), online Huber update, robust teacher |
+| `gate` | Track loss by the outlier gate on all 60 routes |
+| `summary` | Best scheme for real time, a 5 s route line and a finished track, against the SDK as it ships |
+| `tracks` | First test route of each scenario, point by point, for plots |
+| `dataset` | Every route with truth and all sensors, e.g. for KalmanNet in PyTorch |
 
-Everything here is synthetic. Before a number goes into the article it has to hold on real phone logs (step 6).
+Everything here is synthetic: numbers still need checking on real phone logs.
 
 The module compiles as a friend of `core:engine` (`friendPaths` in `build.gradle.kts`), like the engine's own tests, so it can drive `MatrixOps`, `SmootherWindow` and `OptimalAlpha` without making them public API.

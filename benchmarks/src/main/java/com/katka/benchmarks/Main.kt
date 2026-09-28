@@ -21,20 +21,20 @@ private fun perScenarioFile(run: (Scenario, File) -> String): (File) -> List<(Re
     { dir -> SCENARIOS.map { sc -> { _: Results -> run(sc, dir) } } }
 
 private val EXPERIMENTS = listOf(
-    Experiment("baseline", "§5.1 без Doppler: KF, UKF, RTS и нейросглаживатель α SDK", jobs = perScenario(::baseline)),
-    Experiment("turns", "§5.1 ложные повороты: доля окон с подавлением α до и после исправления TurnDetection", jobs = perScenario(::turns)),
-    Experiment("window", "§5.1 размер окна L", jobs = perScenario(::window)),
-    Experiment("loss", "§5.1 метки и взвешенный loss для α-сети поверх KF", jobs = perScenario(::lossCheck)),
-    Experiment("leaderboard", "§5.1 без Doppler: NN-оценка шума и «SG на поворотах» поверх KF и RTS", jobs = perScenario(::leaderboard)),
-    Experiment("noise-input", "§5.3 входы сети-оценщика шума: с текущей инновацией и без", jobs = perScenario(::noiseInput)),
-    Experiment("noise-teacher", "§5.3 учитель для сети-оценщика шума без истины", jobs = perScenario(::noiseTeacher)),
-    Experiment("stage1", "§5.2 этап 1: лучшая основа (фильтр + сглаживание 5 с), позиция / + Doppler / + гироскоп", jobs = perScenario(::stage1)),
-    Experiment("stage2", "§5.3 этап 2: механизмы поверх KF-CV + Doppler + RTS", jobs = perScenario { sc, r -> stage2(sc, r) }),
-    Experiment("stage3", "§5.4 этап 3: дообучение и приёмка сети-оценщика шума", jobs = { listOf(::stage3) }),
-    Experiment("stage4", "§5.5 этап 4: робастные потери и робастный учитель", jobs = perScenario(::stage4)),
-    Experiment("gate", "шаг 1: потеря трека гейтом, движок SDK на всех 60 маршрутах (потерян = ≥10 отброшенных подряд)",
+    Experiment("baseline", "без Doppler: KF, UKF, RTS и нейросглаживатель α SDK", jobs = perScenario(::baseline)),
+    Experiment("turns", "ложные повороты: доля окон с подавлением α до и после исправления TurnDetection", jobs = perScenario(::turns)),
+    Experiment("window", "размер окна L", jobs = perScenario(::window)),
+    Experiment("loss", "метки и взвешенный loss для α-сети поверх KF", jobs = perScenario(::lossCheck)),
+    Experiment("leaderboard", "без Doppler: NN-оценка шума и «SG на поворотах» поверх KF и RTS", jobs = perScenario(::leaderboard)),
+    Experiment("noise-input", "входы сети-оценщика шума: с текущей инновацией и без", jobs = perScenario(::noiseInput)),
+    Experiment("noise-teacher", "учитель для сети-оценщика шума без истины", jobs = perScenario(::noiseTeacher)),
+    Experiment("stage1", "этап 1: лучшая основа (фильтр + сглаживание 5 с), позиция / + Doppler / + гироскоп", jobs = perScenario(::stage1)),
+    Experiment("stage2", "этап 2: механизмы поверх KF-CV + Doppler + RTS", jobs = perScenario { sc, r -> stage2(sc, r) }),
+    Experiment("stage3", "этап 3: дообучение и приёмка сети-оценщика шума", jobs = { listOf(::stage3) }),
+    Experiment("stage4", "этап 4: робастные потери и робастный учитель", jobs = perScenario(::stage4)),
+    Experiment("gate", "потеря трека гейтом, движок SDK на всех 60 маршрутах (потерян = ≥10 отброшенных подряд)",
         header = GATE_HEADER, jobs = perScenario(::gate)),
-    Experiment("summary", "§5.6 лучшая комбинация для каждого режима против SDK как есть", jobs = perScenario(::summary)),
+    Experiment("summary", "лучшая комбинация для каждого режима против SDK как есть", jobs = perScenario(::summary)),
     Experiment("tracks", "CSV: первый тестовый маршрут каждого сценария по точкам, для графиков", jobs = perScenarioFile(::tracks)),
     Experiment("dataset", "CSV: все маршруты с истиной и сенсорами (например, для KalmanNet)", jobs = perScenarioFile(::dataset))
 )

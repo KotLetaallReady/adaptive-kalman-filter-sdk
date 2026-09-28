@@ -79,7 +79,6 @@ class Results {
         rows += Row(table, scenario, method, lagS, metric, value, params)
     }
 
-    /** Standard error metrics of [s]: rmse, per-segment rmse, p95, jitter, path length error and µs per step when timed. */
     fun addStats(table: String, scenario: String, s: Stats, params: String = "") {
         val m = mutableListOf("rmse" to s.rmse(), "rmse_straight" to s.seg(Seg.STRAIGHT), "rmse_turn" to s.seg(Seg.TURN),
             "rmse_stop" to s.seg(Seg.STOP), "p95" to s.p95(), "jitter" to s.jitter(), "length_err_pct" to s.lengthErrPct())

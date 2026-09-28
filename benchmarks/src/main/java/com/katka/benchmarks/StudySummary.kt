@@ -2,7 +2,7 @@ package com.katka.benchmarks
 
 import java.io.File
 
-// HANDOFF §5.6: the best scheme for each use case, next to the SDK as it ships; plus CSV exports.
+// The best scheme for each use case next to the SDK as it ships, plus CSV exports.
 
 private class Contender(val name: String, val lagS: Int, val run: (Route) -> Track)
 
@@ -33,7 +33,7 @@ private fun contenders(sc: Scenario, train: List<Route>): Pair<List<Contender>, 
     return list to "SDK q=$qKf; UKF σa=${ukfP.first} σω=${ukfP.second}; KF+Doppler ${base.params}"
 }
 
-/** `summary` (§5.6): real time (0 s), a live route line (5 s) and a finished track, against the shipped SDK. */
+/** `summary`: real time (0 s), a live route line (5 s) and a finished track, against the shipped SDK. */
 fun summary(sc: Scenario, out: Results): String {
     val (train, test) = makeData(sc)
     val (list, params) = contenders(sc, train)
@@ -49,7 +49,7 @@ fun summary(sc: Scenario, out: Results): String {
         out.add("summary", sc.label, s.name, s.lagS, "rel_to_sdk_pct", 100 * (s.rmse() / ref.rmse() - 1), params)
     }
     return buildString {
-        appendLine().appendLine("=== §5.6 лучшая комбинация · ${sc.label} ===")
+        appendLine().appendLine("=== лучшая комбинация · ${sc.label} ===")
         appendLine("подбор: $params")
         appendLine(fmt("%-36s %6s %6s %6s %6s %6s %6s %6s %8s", "схема", "лаг", "RMSE", "прямо", "поворт", "стоп", "p95", "дрожь", "к SDK"))
         for (s in stats) {

@@ -53,7 +53,7 @@ enum class Kind(val cruise: Double) { WALK(1.4), BIKE(5.0) }
 enum class Noise { WHITE, REALISTIC, MISCAL }
 enum class Seg { STRAIGHT, TURN, STOP }
 
-/** One scenario of HANDOFF §5 with its fixed seed. */
+/** One benchmark scenario with its fixed seed. */
 data class Scenario(val kind: Kind, val noise: Noise, val seed: Long) {
     val label get() = "${kind.name}/${noise.name}"
 }

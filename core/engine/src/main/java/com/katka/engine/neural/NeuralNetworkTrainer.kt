@@ -4,11 +4,8 @@ import kotlin.math.sqrt
 import kotlin.random.Random
 
 /**
- * Trains a [NeuralNetwork] in place with mini-batch Adam and mean squared error,
- * scaled per sample by [TrainingSample.weight].
- *
- * This class is intentionally platform-free, so it can be used in JVM tests,
- * desktop tools or Android host applications.
+ * Trains a [NeuralNetwork] in place with mini-batch Adam and mean squared error, scaled per
+ * sample by [TrainingSample.weight].
  *
  * @param network Network instance to update.
  * @param learningRate Adam learning rate.
@@ -16,8 +13,8 @@ import kotlin.random.Random
  * @param beta1 Adam first-moment decay.
  * @param beta2 Adam second-moment decay.
  * @param eps Small denominator offset for numerical stability.
- * @param random Source for shuffling the dataset every epoch. Pass a seeded
- * instance to make training reproducible.
+ * @param random Source for shuffling the dataset every epoch; pass a seeded instance for
+ * reproducible training.
  */
 class NeuralNetworkTrainer(
     private val network: NeuralNetwork,

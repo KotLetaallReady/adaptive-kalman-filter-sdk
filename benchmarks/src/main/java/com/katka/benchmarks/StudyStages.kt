@@ -2,9 +2,9 @@ package com.katka.benchmarks
 
 import kotlin.math.sqrt
 
-// HANDOFF §5.2–5.5: phone sensors (Doppler, gyro, accelerometer), then mechanisms on top of KF-CV + Doppler + RTS.
+// Phone sensors (Doppler, gyro, accelerometer), then mechanisms on top of KF-CV + Doppler + RTS.
 
-/** `stage1` (§5.2): which Kalman-family filter + smoother gives the best route, with and without Doppler and gyro. */
+/** `stage1`: which Kalman-family filter + smoother gives the best route, with and without Doppler and gyro. */
 fun stage1(sc: Scenario, out: Results): String {
     val (train, test) = makeData(sc)
     val cvGrid = listOf(0.05, 0.1, 0.2, 0.35, 0.5, 0.8, 1.2).map { it to 0.0 }
@@ -43,7 +43,7 @@ fun stage1(sc: Scenario, out: Results): String {
     out.add("stage1", sc.label, "KF-CV (parity check)", LAG, "rmse_all_points", mine, params(0))
 
     return buildString {
-        appendLine().appendLine("=== §5.2 этап 1 · ${sc.label} ===")
+        appendLine().appendLine("=== этап 1 · ${sc.label} ===")
         appendLine(fmt("%-28s | %-7s | %-38s | %-6s | %s", "фильтр → сглаживатель", "фильтр", "сглаж. 5 с: RMSE / прямо / поворот / стоп", "дрожь", "мкс/шаг  параметры"))
         for (i in STAGE1.indices) {
             val s = smo[i]
@@ -56,7 +56,7 @@ fun stage1(sc: Scenario, out: Results): String {
     }
 }
 
-/** `stage2` (§5.3): ZUPT (rules, classifier, oracle), EM calibration and the self-trained noise network on top of [v]. */
+/** `stage2`: ZUPT (rules, classifier, oracle), EM calibration and the self-trained noise network on top of [v]. */
 fun stage2(sc: Scenario, out: Results, v: Variant = KF_DOPPLER): String {
     val (train, test) = makeData(sc)
     val base = tuneBase(v, train)
@@ -91,7 +91,6 @@ fun stage2(sc: Scenario, out: Results, v: Variant = KF_DOPPLER): String {
         val common = runs.flatMap { listOf(it.first.keys, it.second.keys) }.reduce { a, b -> a intersect b }.filter { it >= WARMUP_MS }.sorted()
         rows.indices.forEach { i -> filt[i].add(truth, runs[i].first, common); smo[i].add(truth, runs[i].second, common) }
     }
-    // classifier quality against the truth (test split)
     fun quality(s: Still): Pair<Int, Int> {
         var tp = 0; var fp = 0; var fn = 0
         for ((_, ms) in test) for (m in ms) { val p = s(m); if (p && m.trueStill) tp++ else if (p) fp++ else if (m.trueStill) fn++ }
@@ -111,7 +110,7 @@ fun stage2(sc: Scenario, out: Results, v: Variant = KF_DOPPLER): String {
         out.add("stage2", sc.label, "классификатор стоянки: $name", 0, "recall_pct", recall.toDouble(), params)
     }
     return buildString {
-        appendLine().appendLine("=== §5.3 этап 2 · ${sc.label} · основа: ${v.name} (${base.params}) ===")
+        appendLine().appendLine("=== этап 2 · ${sc.label} · основа: ${v.name} (${base.params}) ===")
         appendLine("классификаторы стоянки: Doppler ${qStr(ruleDoppler)} | аксел. ${qStr(ruleAcc)} | оба ${qStr(ruleBoth)} | NN ${qStr(nnStill)}")
         appendLine(fmt("%-36s | %-14s | %-36s | %s", "механизм", "фильтр (0 с)", "сглаж. 5 с: RMSE / прямо / поворот / стоп", "дрожь"))
         for (i in rows.indices) {
@@ -123,7 +122,7 @@ fun stage2(sc: Scenario, out: Results, v: Variant = KF_DOPPLER): String {
     }
 }
 
-/** `stage3` (§5.4): how the noise network should be (re)trained and whether a truth-free check can accept it. */
+/** `stage3`: how the noise network should be (re)trained and whether a truth-free check can accept it. */
 fun stage3(out: Results): String {
     val v = KF_DOPPLER
     val data = SCENARIOS.map { makeData(it) }
@@ -135,7 +134,7 @@ fun stage3(out: Results): String {
 
     val columns = listOf("accuracy", "EM k·acc²", "NN: свой", "NN: смесь", "NN: 1 сценар.", "страж (NLL)")
     val sb = StringBuilder()
-    sb.appendLine().appendLine("=== §5.4 этап 3 · дообучение оценщика шума на основе KF-CV + Doppler (сглаж. 5 с, RMSE и изменение к R из accuracy) ===")
+    sb.appendLine().appendLine("=== этап 3 · дообучение оценщика шума на основе KF-CV + Doppler (сглаж. 5 с, RMSE и изменение к R из accuracy) ===")
     sb.appendLine(fmt("%-20s | %-13s | %-13s | %-13s | %-13s | %-13s | %-13s | %s", "сценарий", *columns.toTypedArray(), "выбор стража"))
     for (i in SCENARIOS.indices) {
         val base = bases[i]; val test = data[i].second
@@ -159,7 +158,7 @@ fun stage3(out: Results): String {
     return sb.toString()
 }
 
-/** `stage4` (§5.5): robust losses offline (IRLS RTS, Huber / Cauchy), Huber update online, robust teacher for the noise network. */
+/** `stage4`: robust losses offline (IRLS RTS, Huber / Cauchy), online Huber update, robust teacher. */
 fun stage4(sc: Scenario, out: Results): String {
     val (train, test) = makeData(sc)
     val base = tuneBase(KF_DOPPLER, train)
@@ -195,7 +194,7 @@ fun stage4(sc: Scenario, out: Results): String {
 }
 
 /**
- * `gate` (bug #2, step 1): the SDK engine KF on all 60 routes of a scenario.
+ * `gate`: the SDK engine KF on all 60 routes of a scenario.
  * "Lost" = the gate rejected at least 10 fixes in a row somewhere on the route.
  */
 fun gate(sc: Scenario, out: Results): String {

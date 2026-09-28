@@ -113,8 +113,8 @@ class RCtx(val obs: Observation, val nu: Double, val nuMean: Double, val nuStd: 
 typealias RModel = (RCtx) -> Double
 
 /**
- * Inputs of the noise estimator: ln(accuracy), mean and std of |innovation| over the last 10 steps, speed, ln σ_pos.
- * [withNu] adds the current innovation, which HANDOFF §5.3 found unstable.
+ * Noise estimator inputs: ln(accuracy), mean and std of |innovation| over the last 10 steps,
+ * speed and ln σ_pos. [withNu] adds the current innovation, which made the estimator unstable.
  */
 fun rFeatures(c: RCtx, withNu: Boolean): DoubleArray {
     val base = doubleArrayOf(ln(c.obs.accuracy.toDouble()), ln(1 + c.nuMean), ln(1 + c.nuStd), c.obs.speed.toDouble(), ln(c.sigmaPos))

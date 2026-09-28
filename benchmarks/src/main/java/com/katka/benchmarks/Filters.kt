@@ -32,8 +32,8 @@ fun chol(A: Array<DoubleArray>): Array<DoubleArray> {
 // ───────────────────────── EKF / UKF with a CTRV motion model, position only ─────────────────────────
 
 /**
- * Coordinated turn with constant velocity, state [x, y, v, ψ, ω]. Uses the SDK's gate rule;
- * [gateRecovery] accepts a fix after 3 rejections in a row, like the SDK since step 1.
+ * Coordinated turn with constant velocity, state [x, y, v, ψ, ω], position only. Uses the SDK
+ * gate; [gateRecovery] accepts a fix after 3 rejections in a row, as the SDK does.
  */
 class Ctrv(private val sa: Double, private val sw: Double, private val unscented: Boolean, private val gateRecovery: Boolean = true) {
     private var x = DoubleArray(5)
@@ -199,7 +199,6 @@ class GFilter(
             predict(dt)
             val xp = x.copyOf(); val pp = MatrixOps.copy(P); val d = lastD
 
-            // position, with the SDK's gate (+ recovery after 3 rejects) and R from accuracy or a model
             val nu = hypot(z.x - x[0], z.y - x[1])
             val mean = if (hist.isEmpty()) nu else hist.average()
             val std = if (hist.size < 2) 0.0 else sqrt(hist.sumOf { (it - mean) * (it - mean) } / hist.size)
@@ -245,7 +244,7 @@ class GFilter(
         }
     }
 
-    /** Zero-velocity update: standing still is a measurement, not a guess. */
+    /** Zero-velocity update. */
     private fun zupt() {
         if (motion == Motion.CTRV) {
             update(intArrayOf(2), doubleArrayOf(0.0), arrayOf(doubleArrayOf(0.05 * 0.05)))
@@ -253,7 +252,7 @@ class GFilter(
         } else update(intArrayOf(2, 3), doubleArrayOf(0.0, 0.0), MatrixOps.diagonal(doubleArrayOf(0.0025, 0.0025)))
     }
 
-    /** Linear update of the selected state components (every measurement here is a component pick). */
+    /** Linear update of the state components listed in [idx]. */
     private fun update(idx: IntArray, z: DoubleArray, R: Array<DoubleArray>) {
         val m = idx.size
         val y = DoubleArray(m) { z[it] - x[idx[it]] }
@@ -270,8 +269,6 @@ class GFilter(
             MatrixOps.mul(MatrixOps.mul(K, R), MatrixOps.transpose(K))
         ))
     }
-
-    // ── motion models ──
 
     private fun ctrv(s: DoubleArray, dt: Double): DoubleArray {
         val px = s[0]; val py = s[1]; val v = s[2]; val psi = s[3]; val w = s[4]
@@ -395,7 +392,6 @@ val STAGE1 = listOf(
     Variant("UKF-CTRV + Doppler + гиро", Motion.CTRV, true, true, true)
 )
 
-/** The base found in stage 1: KF-CV + Doppler. */
 val KF_DOPPLER = STAGE1[3]
 
 /** Fixed-lag delay in samples (1 Hz), the same 5 s as the SDK smoother window L = 11. */
