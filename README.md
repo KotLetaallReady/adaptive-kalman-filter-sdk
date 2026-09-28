@@ -153,7 +153,9 @@ kalmanSdk.stop()
 
 ### Configurable Neural Smoother
 
-`SmootherConfig` controls the neural fixed-lag smoother. The defaults preserve the original behaviour: `windowLength = 11`, `turnThresholdDeg = 30.0`, `alphaSuppressionTurnDeg = 60.0`, `minTurnSuppression = 0.05`.
+`SmootherConfig` controls the neural fixed-lag smoother. Defaults: `windowLength = 11`, `turnThresholdDeg = 30.0`, `alphaSuppressionTurnDeg = 60.0`, `minTurnSuppression = 0.05`, `turnDetection = TurnDetection.VELOCITY`, `minTurnSpeedMs = 0.5`.
+
+Turns are measured from the Kalman velocity heading; samples slower than `minTurnSpeedMs` are skipped. The earlier `TurnDetection.POINT_DIFF` mode (bearing between consecutive filtered points) reported turns on most walking windows, because at walking speed a one-second step is comparable to the filter jitter, and that pushed almost every training label to zero.
 
 ```kotlin
 val smootherConfig = SmootherConfig(
@@ -172,7 +174,7 @@ val smoother = NeuralTrajectorySmoother(
 )
 ```
 
-Use the same `SmootherConfig` for training and inference. New saved models store this config; legacy `v2` models load with default values.
+Use the same `SmootherConfig` for training and inference. New saved models (`v4`) store this config. Legacy `v3` models keep their stored values and `v2` models load with defaults; both load with `TurnDetection.POINT_DIFF`, so their features stay the same. Retrain them to get the fixed turn detection.
 
 ### Custom Sensor Source
 
@@ -376,7 +378,9 @@ kalmanSdk.stop()
 
 ### Настраиваемый Нейросетевой Сглаживатель
 
-`SmootherConfig` управляет fixed-lag нейросетевым сглаживателем. Значения по умолчанию сохраняют прежнее поведение: `windowLength = 11`, `turnThresholdDeg = 30.0`, `alphaSuppressionTurnDeg = 60.0`, `minTurnSuppression = 0.05`.
+`SmootherConfig` управляет fixed-lag нейросетевым сглаживателем. Значения по умолчанию: `windowLength = 11`, `turnThresholdDeg = 30.0`, `alphaSuppressionTurnDeg = 60.0`, `minTurnSuppression = 0.05`, `turnDetection = TurnDetection.VELOCITY`, `minTurnSpeedMs = 0.5`.
+
+Повороты определяются по направлению скорости из фильтра Калмана; точки медленнее `minTurnSpeedMs` пропускаются. Прежний режим `TurnDetection.POINT_DIFF` (направление между соседними отфильтрованными точками) находил «повороты» почти в каждом окне при ходьбе: на пешеходной скорости шаг за секунду сравним с дрожанием фильтра, и из-за этого почти все обучающие метки становились нулевыми.
 
 ```kotlin
 val smootherConfig = SmootherConfig(
@@ -395,7 +399,7 @@ val smoother = NeuralTrajectorySmoother(
 )
 ```
 
-Используйте один и тот же `SmootherConfig` при обучении и применении модели. Новые сохранённые модели хранят этот конфиг; старые модели формата `v2` загружаются со значениями по умолчанию.
+Используйте один и тот же `SmootherConfig` при обучении и применении модели. Новые сохранённые модели (`v4`) хранят этот конфиг. Модели `v3` сохраняют свои значения, `v2` загружаются со значениями по умолчанию; обе загружаются с `TurnDetection.POINT_DIFF`, чтобы их признаки не изменились. Чтобы получить исправленное определение поворотов, переобучите их.
 
 ### Свой Источник Данных
 

@@ -1,6 +1,7 @@
 package com.katka.engine.neural
 
 import com.katka.engine.smoothing.SmootherConfig
+import com.katka.engine.smoothing.TurnDetection
 
 /**
  * Dependency-free serialization of a trained smoother model to a text blob.
@@ -10,7 +11,8 @@ import com.katka.engine.smoothing.SmootherConfig
  */
 object SmootherCodec {
 
-    private const val VERSION = "v3"
+    private const val VERSION = "v4"
+    private const val LEGACY_V3 = "v3"
     private const val LEGACY_V2 = "v2"
 
     /** Serialises the network, feature normalisation and smoother config to a text blob. */
@@ -49,7 +51,9 @@ object SmootherCodec {
     fun decode(text: String): LoadedSmoother? = runCatching {
         val lines = text.trim().lines()
         val version = lines[0].trim()
-        require(version == VERSION || version == LEGACY_V2) { "unknown smoother format: ${lines[0]}" }
+        require(version == VERSION || version == LEGACY_V3 || version == LEGACY_V2) {
+            "unknown smoother format: ${lines[0]}"
+        }
 
         val inputSize = lines[1].trim().toInt()
         val hiddenSizes = lines[2].trim()
@@ -57,8 +61,13 @@ object SmootherCodec {
         val outputSize = lines[3].trim().toInt()
         val activation = OutputActivation.valueOf(lines[4].trim())
 
-        val smootherConfig = if (version == VERSION) parseConfig(lines[5]) else SmootherConfig()
-        val featureOffset = if (version == VERSION) 6 else 5
+        // Models saved before v4 were trained on point-difference turn features.
+        val smootherConfig = when (version) {
+            VERSION -> parseConfig(lines[5])
+            LEGACY_V3 -> parseLegacyConfig(lines[5])
+            else -> SmootherConfig(turnDetection = TurnDetection.POINT_DIFF)
+        }
+        val featureOffset = if (version == LEGACY_V2) 5 else 6
         val featureMean = parseDoubles(lines[featureOffset])
         val featureStd = parseDoubles(lines[featureOffset + 1])
         val weightValues = parseDoubles(lines[featureOffset + 2])
@@ -81,17 +90,31 @@ object SmootherCodec {
     }.getOrNull()
 
     private fun SmootherConfig.toCodecLine(): String =
-        listOf(windowLength, turnThresholdDeg, alphaSuppressionTurnDeg, minTurnSuppression)
+        listOf(windowLength, turnThresholdDeg, alphaSuppressionTurnDeg, minTurnSuppression, turnDetection, minTurnSpeedMs)
             .joinToString(" ")
 
     private fun parseConfig(line: String): SmootherConfig {
+        val tokens = line.trim().split(" ")
+        require(tokens.size == 6) { "invalid smoother config line" }
+        return SmootherConfig(
+            windowLength = tokens[0].toDouble().toInt(),
+            turnThresholdDeg = tokens[1].toDouble(),
+            alphaSuppressionTurnDeg = tokens[2].toDouble(),
+            minTurnSuppression = tokens[3].toDouble(),
+            turnDetection = TurnDetection.valueOf(tokens[4]),
+            minTurnSpeedMs = tokens[5].toDouble()
+        )
+    }
+
+    private fun parseLegacyConfig(line: String): SmootherConfig {
         val values = parseDoubles(line)
         require(values.size == 4) { "invalid smoother config line" }
         return SmootherConfig(
             windowLength = values[0].toInt(),
             turnThresholdDeg = values[1],
             alphaSuppressionTurnDeg = values[2],
-            minTurnSuppression = values[3]
+            minTurnSuppression = values[3],
+            turnDetection = TurnDetection.POINT_DIFF
         )
     }
 

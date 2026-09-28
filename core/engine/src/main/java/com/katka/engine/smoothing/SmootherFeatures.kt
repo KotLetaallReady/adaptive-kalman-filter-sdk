@@ -23,7 +23,7 @@ internal object SmootherFeatures {
         val innov = window.map { it.innovationMag }
         val f1 = innov.average()
         val f2 = std(innov, f1)
-        val f3 = turnAnglesDeg(window).sum()
+        val f3 = turnAnglesDeg(window, config).sum()
         val f4 = window.map { it.speed }.average()
         val f5 = window.map { it.accuracy }.average()
         val steps = stepLengths(window)
@@ -36,18 +36,21 @@ internal object SmootherFeatures {
         window: List<SmootherInput>,
         config: SmootherConfig = SmootherConfig()
     ): Double =
-        turnAnglesDeg(window).filter { it > config.turnThresholdDeg }.sum()
+        turnAnglesDeg(window, config).filter { it > config.turnThresholdDeg }.sum()
 
-    /** Absolute turn angles in degrees between consecutive Kalman-track segments. */
-    private fun turnAnglesDeg(window: List<SmootherInput>): List<Double> {
+    /** Absolute turn angles in degrees between consecutive headings measured per [SmootherConfig.turnDetection]. */
+    private fun turnAnglesDeg(window: List<SmootherInput>, config: SmootherConfig): List<Double> {
         if (window.size < 3) return emptyList()
 
-        val bearings = ArrayList<Double>(window.size - 1)
-        for (i in 0 until window.size - 1) {
-            val dx = window[i + 1].kfX - window[i].kfX
-            val dy = window[i + 1].kfY - window[i].kfY
-            bearings.add(atan2(dy, dx))
+        val bearings = when (config.turnDetection) {
+            TurnDetection.POINT_DIFF -> (0 until window.size - 1).map { i ->
+                atan2(window[i + 1].kfY - window[i].kfY, window[i + 1].kfX - window[i].kfX)
+            }
+            TurnDetection.VELOCITY -> window
+                .filter { hypot(it.vx, it.vy) >= config.minTurnSpeedMs }
+                .map { atan2(it.vy, it.vx) }
         }
+        if (bearings.size < 2) return emptyList()
 
         val turns = ArrayList<Double>(bearings.size - 1)
         for (i in 1 until bearings.size) {

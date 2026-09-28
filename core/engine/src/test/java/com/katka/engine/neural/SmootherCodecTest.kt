@@ -1,6 +1,7 @@
 package com.katka.engine.neural
 
 import com.katka.engine.smoothing.SmootherConfig
+import com.katka.engine.smoothing.TurnDetection
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -22,7 +23,9 @@ class SmootherCodecTest {
             windowLength = 7,
             turnThresholdDeg = 20.0,
             alphaSuppressionTurnDeg = 90.0,
-            minTurnSuppression = 0.1
+            minTurnSuppression = 0.1,
+            turnDetection = TurnDetection.VELOCITY,
+            minTurnSpeedMs = 0.8
         )
 
         val text = SmootherCodec.encode(net, mean, std, config)
@@ -47,7 +50,7 @@ class SmootherCodecTest {
     }
 
     @Test
-    fun decodeLegacyV2_usesDefaultSmootherConfig() {
+    fun decodeLegacyV2_usesDefaultsWithPointDiffTurns() {
         val net = NeuralNetwork(NetworkConfig.default(), seed = 7)
         val mean = DoubleArray(SmootherConfig.FEATURE_COUNT) { it.toDouble() }
         val std = DoubleArray(SmootherConfig.FEATURE_COUNT) { 1.0 }
@@ -57,6 +60,29 @@ class SmootherCodecTest {
 
         val loaded = SmootherCodec.decode(lines.joinToString("\n"))
         assertNotNull(loaded); loaded!!
-        assertEquals(SmootherConfig(), loaded.smootherConfig)
+        assertEquals(SmootherConfig(turnDetection = TurnDetection.POINT_DIFF), loaded.smootherConfig)
+    }
+
+    @Test
+    fun decodeLegacyV3_keepsStoredConfigWithPointDiffTurns() {
+        val net = NeuralNetwork(NetworkConfig.default(), seed = 9)
+        val mean = DoubleArray(SmootherConfig.FEATURE_COUNT) { it.toDouble() }
+        val std = DoubleArray(SmootherConfig.FEATURE_COUNT) { 1.0 }
+        val lines = SmootherCodec.encode(net, mean, std).trim().lines().toMutableList()
+        lines[0] = "v3"
+        lines[5] = "9 25.0 80.0 0.08"
+
+        val loaded = SmootherCodec.decode(lines.joinToString("\n"))
+        assertNotNull(loaded); loaded!!
+        assertEquals(
+            SmootherConfig(
+                windowLength = 9,
+                turnThresholdDeg = 25.0,
+                alphaSuppressionTurnDeg = 80.0,
+                minTurnSuppression = 0.08,
+                turnDetection = TurnDetection.POINT_DIFF
+            ),
+            loaded.smootherConfig
+        )
     }
 }

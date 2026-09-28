@@ -1,11 +1,29 @@
 package com.katka.engine.smoothing
 
+/** How the smoother measures turn angles inside a window. */
+enum class TurnDetection {
+    /**
+     * Bearing between consecutive Kalman points. At walking speed a one-second
+     * step is comparable to the filter jitter, so this reports turns on straight
+     * segments and while standing still. Kept only so models saved before the
+     * `v4` format keep their original features.
+     */
+    POINT_DIFF,
+
+    /**
+     * Bearing of the Kalman velocity estimate. Samples slower than
+     * [SmootherConfig.minTurnSpeedMs] have no reliable heading and are skipped.
+     */
+    VELOCITY
+}
+
 /**
  * Configuration for the fixed-lag neural trajectory smoother.
  *
- * The defaults match the original library behaviour. Pass the same config to
- * [SmoothingTrainingCollector] and [NeuralTrajectorySmoother] when training and
- * inference should use custom smoothing behaviour.
+ * Pass the same config to [SmoothingTrainingCollector] and
+ * [NeuralTrajectorySmoother] when training and inference should use custom
+ * smoothing behaviour. Models saved before the `v4` format load with
+ * [TurnDetection.POINT_DIFF] so their features stay unchanged.
  *
  * @property windowLength Fixed-lag window length, also known as `L`. Larger
  * windows give Savitzky-Golay and the neural model more context, at the cost of
@@ -16,12 +34,17 @@ package com.katka.engine.smoothing
  * [minTurnSuppression] during training.
  * @property minTurnSuppression Lower bound for the alpha suppression factor on
  * sharp turns.
+ * @property turnDetection How turn angles are measured.
+ * @property minTurnSpeedMs With [TurnDetection.VELOCITY], samples slower than
+ * this speed (m/s) are ignored when measuring turns.
  */
 data class SmootherConfig(
     val windowLength: Int = DEFAULT_WINDOW_LENGTH,
     val turnThresholdDeg: Double = DEFAULT_TURN_THRESHOLD_DEG,
     val alphaSuppressionTurnDeg: Double = DEFAULT_ALPHA_SUPPRESSION_TURN_DEG,
-    val minTurnSuppression: Double = DEFAULT_MIN_TURN_SUPPRESSION
+    val minTurnSuppression: Double = DEFAULT_MIN_TURN_SUPPRESSION,
+    val turnDetection: TurnDetection = TurnDetection.VELOCITY,
+    val minTurnSpeedMs: Double = DEFAULT_MIN_TURN_SPEED_MS
 ) {
     init {
         require(windowLength >= 3) { "windowLength must be at least 3." }
@@ -29,6 +52,7 @@ data class SmootherConfig(
         require(turnThresholdDeg >= 0.0) { "turnThresholdDeg must be non-negative." }
         require(alphaSuppressionTurnDeg > 0.0) { "alphaSuppressionTurnDeg must be positive." }
         require(minTurnSuppression in 0.0..1.0) { "minTurnSuppression must be in [0, 1]." }
+        require(minTurnSpeedMs >= 0.0) { "minTurnSpeedMs must be non-negative." }
     }
 
     /** Index of the point emitted when the fixed-lag window is full. */
@@ -49,5 +73,8 @@ data class SmootherConfig(
 
         /** Original minimum alpha suppression factor for sharp turns. */
         const val DEFAULT_MIN_TURN_SUPPRESSION = 0.05
+
+        /** Below this speed the velocity heading is dominated by filter noise. */
+        const val DEFAULT_MIN_TURN_SPEED_MS = 0.5
     }
 }

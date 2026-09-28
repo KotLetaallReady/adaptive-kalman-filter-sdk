@@ -20,6 +20,56 @@ class SmootherPipelineTest {
             innovationMag = 0.5, sigmaPos = 2.0
         )
 
+    private fun moving(i: Int, kfx: Double, kfy: Double, vx: Double, vy: Double) =
+        SmootherInput(
+            timestamp = i.toLong(),
+            kfX = kfx, kfY = kfy,
+            rawX = kfx, rawY = kfy,
+            vx = vx, vy = vy,
+            speed = kotlin.math.hypot(vx, vy), accuracy = 5.0,
+            innovationMag = 0.5, sigmaPos = 2.0
+        )
+
+    private fun fill(config: SmootherConfig, step: (Int) -> SmootherInput): SmootherWindow =
+        SmootherWindow(config).apply { for (i in 0 until config.windowLength) push(step(i)) }
+
+    @Test
+    fun walkingJitter_isATurnForPointDiff_butNotForVelocity() {
+        // Walking straight east at 1.4 m/s; the filtered points wobble ±0.8 m sideways.
+        val step = { i: Int -> moving(i, 1.4 * i, if (i % 2 == 0) 0.8 else -0.8, vx = 1.4, vy = 0.0) }
+
+        val legacy = fill(SmootherConfig(turnDetection = TurnDetection.POINT_DIFF), step)
+        val fixed = fill(SmootherConfig(), step)
+
+        assertTrue("point differences see phantom turns", legacy.turnSuppressionPhiDeg() > 60.0)
+        assertEquals(0.0, fixed.turnSuppressionPhiDeg(), 1e-9)
+        assertEquals(0.0, fixed.rawFeatures()[2], 1e-9)
+    }
+
+    @Test
+    fun velocityHeading_detectsARealTurn() {
+        // Heading swings from east to north in 45° steps mid-window.
+        val config = SmootherConfig()
+        val w = fill(config) { i ->
+            val deg = ((i - 4).coerceIn(0, 2)) * 45.0
+            val rad = Math.toRadians(deg)
+            moving(i, i.toDouble(), 0.0, vx = 2.0 * kotlin.math.cos(rad), vy = 2.0 * kotlin.math.sin(rad))
+        }
+        assertEquals(90.0, w.turnSuppressionPhiDeg(), 1e-6)
+    }
+
+    @Test
+    fun velocityHeading_ignoresSamplesBelowMinTurnSpeed() {
+        // Standing still: the velocity estimate is noise pointing anywhere.
+        val config = SmootherConfig()
+        val w = fill(config) { i ->
+            val rad = Math.toRadians(i * 137.0)
+            moving(i, 0.0, 0.0, vx = 0.2 * kotlin.math.cos(rad), vy = 0.2 * kotlin.math.sin(rad))
+        }
+        assertEquals(0.0, w.turnSuppressionPhiDeg(), 1e-9)
+        assertEquals(0.0, w.rawFeatures()[2], 1e-9)
+    }
+
     @Test
     fun window_fillsAtConfiguredLength_andCentreIsMiddle() {
         val config = SmootherConfig()
