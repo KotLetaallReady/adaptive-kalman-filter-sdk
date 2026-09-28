@@ -71,7 +71,12 @@ internal object MatrixOps {
         return R
     }
 
-    /** Matrix inverse via Gauss-Jordan elimination with partial pivoting; throws if singular. */
+    /**
+     * Matrix inverse via Gauss-Jordan elimination with partial pivoting.
+     *
+     * A near-zero pivot is nudged by `1e-6` instead of failing, so a singular
+     * matrix gives a large but finite result.
+     */
     fun inverse(A: Array<DoubleArray>): Array<DoubleArray> {
         val n = A.size
         require(n > 0 && A.all { it.size == n }) { "inverse: must be square" }
@@ -87,10 +92,10 @@ internal object MatrixOps {
             }
             val tmp = aug[col]; aug[col] = aug[maxRow]; aug[maxRow] = tmp
 
-            val pivot = aug[col][col]
-            if (abs(pivot) < 1e-10) {
+            if (abs(aug[col][col]) < 1e-10) {
                 aug[col][col] += 1e-6
             }
+            val pivot = aug[col][col]
 
             for (j in 0 until 2 * n) aug[col][j] /= pivot
 
