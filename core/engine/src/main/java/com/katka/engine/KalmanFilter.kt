@@ -17,9 +17,14 @@ import kotlin.math.cos
  *
  * @param processNoiseStd Standard deviation of the process noise used in the
  * prediction step. Larger values make the filter adapt faster but smooth less.
+ * @param useWallClockTime When `true`, the time step is cross-checked against
+ * the system clock, which suits a live sensor stream. Pass `false` to replay
+ * recorded observations: the time step then comes only from
+ * [Observation.timestamp], so results are deterministic.
  */
 class KalmanFilter(
-    private val processNoiseStd: Double = 0.5
+    private val processNoiseStd: Double = 0.5,
+    private val useWallClockTime: Boolean = true
 ) {
     private var state: KalmanState? = null
     private var lastTimestamp: Long = -1L
@@ -63,26 +68,30 @@ class KalmanFilter(
             return initialise(obs)
         }
 
-        val nowMs = System.currentTimeMillis()
+        val nowMs = if (useWallClockTime) System.currentTimeMillis() else -1L
 
         val dtFromGps  = (obs.timestamp - lastTimestamp) / 1000.0
-        val dtFromWall = if (lastWallClockMs > 0)
-            (nowMs - lastWallClockMs) / 1000.0
-        else
-            dtFromGps
-
-        val dt = when {
-            dtFromGps <= 0 ->
-                dtFromWall
-            dtFromWall <= 0 ->
-                dtFromGps.coerceIn(0.001, 30.0)
-            dtFromGps / dtFromWall > 3.0 ->
-                dtFromWall
-            dtFromWall / dtFromGps > 3.0 ->
-                dtFromWall
-            else ->
+        val dt = if (!useWallClockTime) {
+            dtFromGps.coerceIn(0.001, 30.0)
+        } else {
+            val dtFromWall = if (lastWallClockMs > 0)
+                (nowMs - lastWallClockMs) / 1000.0
+            else
                 dtFromGps
-        }.coerceIn(0.001, 30.0)
+
+            when {
+                dtFromGps <= 0 ->
+                    dtFromWall
+                dtFromWall <= 0 ->
+                    dtFromGps.coerceIn(0.001, 30.0)
+                dtFromGps / dtFromWall > 3.0 ->
+                    dtFromWall
+                dtFromWall / dtFromGps > 3.0 ->
+                    dtFromWall
+                else ->
+                    dtFromGps
+            }.coerceIn(0.001, 30.0)
+        }
 
         lastTimestamp   = obs.timestamp
         lastWallClockMs = nowMs
