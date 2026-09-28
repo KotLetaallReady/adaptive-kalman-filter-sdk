@@ -1,9 +1,11 @@
 package com.katka.engine.neural
 
 import kotlin.math.sqrt
+import kotlin.random.Random
 
 /**
- * Trains a [NeuralNetwork] in place with mini-batch Adam and mean squared error.
+ * Trains a [NeuralNetwork] in place with mini-batch Adam and mean squared error,
+ * scaled per sample by [TrainingSample.weight].
  *
  * This class is intentionally platform-free, so it can be used in JVM tests,
  * desktop tools or Android host applications.
@@ -14,6 +16,8 @@ import kotlin.math.sqrt
  * @param beta1 Adam first-moment decay.
  * @param beta2 Adam second-moment decay.
  * @param eps Small denominator offset for numerical stability.
+ * @param random Source for shuffling the dataset every epoch. Pass a seeded
+ * instance to make training reproducible.
  */
 class NeuralNetworkTrainer(
     private val network: NeuralNetwork,
@@ -21,7 +25,8 @@ class NeuralNetworkTrainer(
     private val batchSize: Int = 32,
     private val beta1: Double = 0.9,
     private val beta2: Double = 0.999,
-    private val eps: Double = 1e-8
+    private val eps: Double = 1e-8,
+    private val random: Random = Random.Default
 ) {
     private val mW: Array<Array<DoubleArray>> = zeroLike(network.weights)
     private val vW: Array<Array<DoubleArray>> = zeroLike(network.weights)
@@ -30,13 +35,13 @@ class NeuralNetworkTrainer(
 
     private var t = 0
 
-    /** Trains for [epochs] passes over [dataset]; returns the mean MSE loss per epoch. */
+    /** Trains for [epochs] passes over [dataset]; returns the mean weighted MSE loss per epoch. */
     fun train(dataset: List<TrainingSample>, epochs: Int): List<Double> {
         require(dataset.isNotEmpty()) { "Cannot train on an empty dataset" }
         val lossPerEpoch = ArrayList<Double>(epochs)
 
         repeat(epochs) {
-            val shuffled = dataset.shuffled()
+            val shuffled = dataset.shuffled(random)
             var epochLoss = 0.0
             var nBatches = 0
             for (batch in shuffled.chunked(batchSize)) {
@@ -48,7 +53,7 @@ class NeuralNetworkTrainer(
         return lossPerEpoch
     }
 
-    /** Runs one mini-batch (forward, backprop, Adam update) and returns its mean MSE loss. */
+    /** Runs one mini-batch (forward, backprop, Adam update) and returns its mean weighted MSE loss. */
     fun trainBatch(batch: List<TrainingSample>): Double {
         val L = network.weights.size
         val dW = zeroLike(network.weights)
@@ -61,11 +66,11 @@ class NeuralNetworkTrainer(
             val target = sample.labels
 
             val m = output.size.toDouble()
-            batchLoss += output.indices.sumOf { i ->
+            batchLoss += sample.weight * output.indices.sumOf { i ->
                 val e = output[i] - target[i]; e * e
             } / m
 
-            var delta = DoubleArray(output.size) { i -> (2.0 / m) * (output[i] - target[i]) }
+            var delta = DoubleArray(output.size) { i -> sample.weight * (2.0 / m) * (output[i] - target[i]) }
 
             for (l in L - 1 downTo 0) {
                 val pre = cache.preActivations[l]
