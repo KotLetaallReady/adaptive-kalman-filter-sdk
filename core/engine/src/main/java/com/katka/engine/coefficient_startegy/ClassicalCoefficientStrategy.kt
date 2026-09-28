@@ -6,11 +6,8 @@ import com.katka.model.Observation
 import kotlin.math.ln
 
 /**
- * Classical Kalman-gain strategy.
- *
- * The strategy builds the measurement-noise matrix `R` from GPS accuracy,
- * clamps unrealistic accuracy values and optionally blends this value with a
- * Sage-Husa-style adaptive estimate based on recent innovations.
+ * Measurement-noise strategy: `R` from clamped GPS accuracy, optionally blended with a
+ * Sage–Husa estimate from recent innovations.
  *
  * @param minAccuracyM Lower bound for reported GPS accuracy, in metres.
  * @param maxAccuracyM Upper bound for reported GPS accuracy, in metres.
@@ -30,7 +27,6 @@ class ClassicalCoefficientStrategy(
     private var adaptiveREstimate: Array<DoubleArray>? = null
     private var stepCount = 0
 
-    /** Feeds the innovation back into the Sage-Husa adaptive-R estimator (no-op unless [adaptiveR]). */
     @Deprecated(
         "KalmanFilter.process now calls onInnovation for every accepted fix. " +
             "Calling this as well feeds the same innovation twice."
@@ -41,7 +37,7 @@ class ClassicalCoefficientStrategy(
         P_pred: Array<DoubleArray>
     ) = onInnovation(innovation, H, P_pred)
 
-    /** Feeds the innovation back into the Sage-Husa adaptive-R estimator (no-op unless [adaptiveR]). */
+    /** Updates the Sage–Husa estimate of `R`; no-op unless [adaptiveR]. */
     override fun onInnovation(
         innovation: DoubleArray,
         H: Array<DoubleArray>,
@@ -102,7 +98,7 @@ class ClassicalCoefficientStrategy(
         adaptiveREstimate = blended
     }
 
-    /** Computes R, the Kalman gain K and the Joseph-form posterior covariance for one update step. */
+    /** Builds `R`, the Kalman gain and the Joseph-form posterior covariance. */
     override fun computeGain(
         P_pred: Array<DoubleArray>,
         H: Array<DoubleArray>,
@@ -149,7 +145,6 @@ class ClassicalCoefficientStrategy(
         stepCount = 0
     }
 
-    /** Builds R from clamped GPS accuracy, blended with the adaptive estimate when available. */
     private fun computeR(
         obs: Observation,
         H: Array<DoubleArray>,

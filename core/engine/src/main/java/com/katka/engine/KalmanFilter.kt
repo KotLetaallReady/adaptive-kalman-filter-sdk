@@ -8,24 +8,15 @@ import com.katka.model.Observation
 import kotlin.math.cos
 
 /**
- * Discrete-time Kalman filter for two-dimensional position tracking.
+ * Kalman filter for 2D position tracking with a constant-velocity model.
  *
- * The filter works in a local metre-based coordinate system whose origin is
- * created from the first accepted GPS fix. Incoming WGS-84 coordinates are
- * projected into that local frame, processed with a constant-velocity model
- * and can then be converted back to latitude/longitude.
+ * It works in local metres around the first accepted fix. A fix outside the outlier gate is
+ * skipped, but after [GATE_RECOVERY_REJECTIONS] skips in a row the next one is accepted, so the
+ * filter cannot lose the track for good.
  *
- * Fixes whose innovation exceeds the outlier gate are skipped, but only up to
- * [GATE_RECOVERY_REJECTIONS] in a row: the next one is accepted, so a filter
- * that has fallen behind the real position catches up instead of rejecting
- * every later fix.
- *
- * @param processNoiseStd Standard deviation of the process noise used in the
- * prediction step. Larger values make the filter adapt faster but smooth less.
- * @param useWallClockTime When `true`, the time step is cross-checked against
- * the system clock, which suits a live sensor stream. Pass `false` to replay
- * recorded observations: the time step then comes only from
- * [Observation.timestamp], so results are deterministic.
+ * @param processNoiseStd Process noise std; larger values follow manoeuvres faster but smooth less.
+ * @param useWallClockTime `true` cross-checks the time step against the system clock (live
+ * stream); `false` takes it only from [Observation.timestamp], which makes replays deterministic.
  */
 class KalmanFilter(
     private val processNoiseStd: Double = 0.5,
@@ -64,12 +55,8 @@ class KalmanFilter(
     }
 
     /**
-     * Processes one observation and returns the posterior state with diagnostics.
-     *
-     * The first accepted observation initializes the local coordinate system and
-     * returns an initial [FilterResult]. Later calls run the prediction and
-     * correction steps using the supplied [strategy], and pass the innovation
-     * of every accepted fix to [CoefficientStrategy.onInnovation].
+     * Processes one observation and returns the posterior state with diagnostics. The first call
+     * only sets up the local frame; each accepted fix is passed to [CoefficientStrategy.onInnovation].
      */
     fun process(obs: Observation, strategy: CoefficientStrategy): FilterResult {
         if (!isInitialised) {
@@ -185,12 +172,7 @@ class KalmanFilter(
     /** Returns the current posterior estimate without processing a new observation. */
     fun getCurrentState(): KalmanState? = state
 
-    /**
-     * Converts WGS-84 degrees into local metres relative to [refLat] and [refLon].
-     *
-     * Call this after the filter has been initialized by [process], otherwise
-     * the reference point is still `(0.0, 0.0)`.
-     */
+    /** Converts WGS-84 degrees to local metres around [refLat], [refLon]; valid after the first [process] call. */
     fun geoToLocal(lat: Double, lon: Double): Pair<Double, Double> {
         val R = EARTH_RADIUS_M
         val dLat = Math.toRadians(lat - refLat)
@@ -208,7 +190,6 @@ class KalmanFilter(
         return lat to lon
     }
 
-    /** Initialises the filter and reference point from the first GPS fix. */
     private fun initialise(obs: Observation): FilterResult {
         refLat = obs.latitude
         refLon = obs.longitude
@@ -233,7 +214,6 @@ class KalmanFilter(
         )
     }
 
-    /** Prediction step: extrapolates state and covariance with the constant-velocity model plus the IMU control input. */
     private fun predict(
         s: KalmanState,
         dt: Double,

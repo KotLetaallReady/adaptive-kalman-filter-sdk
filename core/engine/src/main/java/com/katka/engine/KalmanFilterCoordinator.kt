@@ -35,7 +35,6 @@ class KalmanFilterCoordinator(
     private val filterMode: FilterMode = FilterMode.CLASSICAL,
     private val logger: Logger = Logger.NoOp
 ) {
-    /** Routes the engine's Log.x(TAG, …) calls through the injected [Logger]; silent by default. */
     private val Log = object {
         fun i(tag: String, m: String) = logger.i(m)
         fun d(tag: String, m: String) = logger.d(m)
@@ -54,10 +53,8 @@ class KalmanFilterCoordinator(
     private var lastObsTimestamp = 0L
 
     /**
-     * Shared stream of per-step filter results.
-     *
-     * The stream starts collecting from [sensorSource] while it has subscribers
-     * and replays the latest result to new subscribers.
+     * Shared stream of per-step results. It collects [sensorSource] while subscribed and replays
+     * the latest result to new subscribers.
      */
     val results: Flow<FilterResult> = flow {
         sensorSource.observations.collect { obs ->
@@ -117,11 +114,8 @@ class KalmanFilterCoordinator(
     }
 
     /**
-     * Computes current-session metrics against the raw GPS track.
-     *
-     * This is mainly useful for diagnostics and demos where raw GPS is used as
-     * the available reference. For a true benchmark, use a separate ground-truth
-     * reference with `MetricsEvaluator`.
+     * Current-session metrics against the raw GPS track, for diagnostics. To score against
+     * ground truth use [com.katka.engine.metrics.MetricsEvaluator].
      */
     fun computeMetrics(): AccuracyMetrics {
         if (resultHistory.size < 2 || rawGpsHistory.size < 2) return AccuracyMetrics.EMPTY
@@ -220,7 +214,6 @@ class KalmanFilterCoordinator(
         }
     }
     
-    /** Logs the incoming observation (init banner on the first fix, one line afterwards). */
     private fun logIncomingObservation(obs: Observation, isFirst: Boolean, gapMs: Long) {
         if (isFirst) {
             Log.i(TAG, buildString {
@@ -246,7 +239,6 @@ class KalmanFilterCoordinator(
         })
     }
 
-    /** Logs the full per-step filter readout (state, K, R, innovation, uncertainty). */
     private fun logFilterResult(result: FilterResult, rawX: Double, rawY: Double, gapMs: Long) {
         val K    = result.kalmanGain
         val kx   = K.getOrNull(0)?.getOrNull(0) ?: 0.0
@@ -292,7 +284,6 @@ class KalmanFilterCoordinator(
         })
     }
 
-    /** Warns on suspicious steps (large innovation, divergence, extreme gain, long gaps). */
     private fun checkAnomalies(result: FilterResult, gapMs: Long) {
         val K   = result.kalmanGain
         val kx  = K.getOrNull(0)?.getOrNull(0) ?: 0.0
@@ -328,7 +319,6 @@ class KalmanFilterCoordinator(
         }
     }
 
-    /** Maps a gain value to a short quality label for the log. */
     private fun gainQuality(k: Double): String = when {
         k > WARN_KALMAN_GAIN_HIGH -> "⚠ ВЫСОКИЙ"
         k < WARN_KALMAN_GAIN_LOW  -> "⚠ НИЗКИЙ"
@@ -336,7 +326,6 @@ class KalmanFilterCoordinator(
         else                      -> "~ допустимо"
     }
 
-    /** Maps an innovation magnitude to a short quality label for the log. */
     private fun innovQuality(mag: Double): String = when {
         mag < 2.0  -> "✓ хорошо"
         mag < 5.0  -> "~ умеренно"

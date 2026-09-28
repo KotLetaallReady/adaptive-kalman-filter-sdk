@@ -18,7 +18,6 @@ class KalmanFilterTest {
     private val refLat = 55.75
     private val refLon = 37.62
 
-    /** GPS fix at local metres (x east, y north) relative to [refLat], [refLon]. */
     private fun fix(tMs: Long, x: Double, y: Double, accuracy: Float = 4f) = Observation(
         timestamp = tMs,
         latitude = refLat + Math.toDegrees(y / EARTH_RADIUS_M),

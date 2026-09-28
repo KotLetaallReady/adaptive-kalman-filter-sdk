@@ -4,11 +4,8 @@ import com.katka.engine.model.GainResult
 import com.katka.model.Observation
 
 /**
- * Strategy that computes the Kalman gain for one correction step.
- *
- * Implement this interface to replace the default measurement-noise model or
- * to experiment with adaptive and learned variants while keeping the main
- * [com.katka.engine.KalmanFilter] unchanged.
+ * Computes the Kalman gain for one correction step. Implement it to replace the
+ * measurement-noise model without changing [com.katka.engine.KalmanFilter].
  */
 interface CoefficientStrategy {
 
@@ -26,11 +23,8 @@ interface CoefficientStrategy {
     ): GainResult
 
     /**
-     * Receives the innovation of an accepted fix after [computeGain].
-     *
-     * [com.katka.engine.KalmanFilter.process] calls this once per accepted
-     * measurement update. Fixes rejected by the outlier gate are not reported.
-     * Override it to adapt the noise model from innovation statistics.
+     * Receives the innovation of every accepted fix right after [computeGain]; fixes rejected by
+     * the outlier gate are not reported. Override it to adapt the noise model.
      *
      * @param innovation Measurement residual `z - Hx` against the prediction.
      * @param H Measurement matrix used for the update.

@@ -17,22 +17,13 @@ data class TimedPosition(
     val y: Double
 )
 
-/**
- * Utility for comparing estimated tracks against a reference track.
- *
- * Points are expected in the same local metre coordinate system. The object is
- * stateless, so it can be used from tests, offline analysis tools and apps.
- */
+/** Compares estimated tracks with a reference track in the same local metre frame. */
 object MetricsEvaluator {
 
     /**
-     * Scores [estimated] against [reference], pairing points by timestamp.
-     *
-     * Each estimated point is paired with the nearest reference point when
-     * their timestamps differ by at most [toleranceMs]; unpaired points are
-     * skipped. This keeps a delayed smoother, which starts emitting later than
-     * the filter, aligned with the reference. Returns [AccuracyMetrics.EMPTY]
-     * when fewer than two points are paired.
+     * Scores [estimated] against [reference], pairing each point with the nearest reference point
+     * within [toleranceMs]; unpaired points are skipped, so a delayed smoother is scored correctly.
+     * Returns [AccuracyMetrics.EMPTY] when fewer than two points are paired.
      */
     fun compute(
         estimated: List<TimedPosition>,
@@ -63,12 +54,6 @@ object MetricsEvaluator {
     ): Pair<AccuracyMetrics, AccuracyMetrics> =
         compute(trackA, reference, toleranceMs) to compute(trackB, reference, toleranceMs)
 
-    /**
-     * Scores [estimated] against [reference] over their common prefix.
-     *
-     * Returns [AccuracyMetrics.EMPTY] when fewer than two paired points are
-     * available.
-     */
     @Deprecated(
         "Pairs points by index, so a delayed track is compared with the wrong reference points. " +
             "Use the TimedPosition overload."
@@ -81,7 +66,6 @@ object MetricsEvaluator {
         return score(estimated.subList(0, n), reference.subList(0, n))
     }
 
-    /** Scores two estimated tracks against the same reference track. */
     @Deprecated(
         "Pairs points by index, so a delayed track is compared with the wrong reference points. " +
             "Use the TimedPosition overload."
@@ -97,7 +81,6 @@ object MetricsEvaluator {
             score(trackB.subList(0, nB), reference.subList(0, nB))
     }
 
-    /** Scores already paired points: `est[i]` and `ref[i]` belong to the same moment. */
     private fun score(
         est: List<Pair<Double, Double>>,
         ref: List<Pair<Double, Double>>
@@ -127,7 +110,6 @@ object MetricsEvaluator {
         return AccuracyMetrics(rmse, mae, maxError, lag, stability, n)
     }
 
-    /** Reference point closest in time to [timestamp], or `null` for an empty reference. */
     private fun nearest(ref: List<TimedPosition>, times: LongArray, timestamp: Long): TimedPosition? {
         if (ref.isEmpty()) return null
         val i = times.binarySearch(timestamp)
@@ -142,7 +124,6 @@ object MetricsEvaluator {
         }
     }
 
-    /** Returns the lag (samples) maximising the cross-correlation of [signal] and [reference]. */
     private fun estimateLag(
         signal: List<Double>,
         reference: List<Double>,
