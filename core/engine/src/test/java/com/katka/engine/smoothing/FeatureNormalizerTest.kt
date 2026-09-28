@@ -16,11 +16,9 @@ class FeatureNormalizerTest {
         val nrm = FeatureNormalizer.fit(rows)
         val normalized = rows.map { nrm.normalize(it) }
 
-        // Column 0: mean ≈ 0
         val mean0 = normalized.sumOf { it[0] } / normalized.size
         assertEquals(0.0, mean0, 1e-9)
 
-        // Column 0: population std ≈ 1
         val std0 = sqrt(normalized.sumOf { it[0] * it[0] } / normalized.size)
         assertEquals(1.0, std0, 1e-9)
 

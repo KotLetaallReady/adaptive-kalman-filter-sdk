@@ -54,7 +54,6 @@ class NeuralNetwork(val config: NetworkConfig, seed: Long = 42L) {
         return act
     }
 
-    /** Forward pass returning per-layer pre- and post-activations for backpropagation. */
     internal fun forwardWithCache(input: DoubleArray): ForwardCache {
         val nLayers = weights.size
         val preActs = arrayOfNulls<DoubleArray>(nLayers)
@@ -85,13 +84,11 @@ class NeuralNetwork(val config: NetworkConfig, seed: Long = 42L) {
 
     private fun relu(x: Double) = if (x > 0.0) x else 0.0
 
-    /** Output-layer activation selected by [NetworkConfig.outputActivation]. */
     private fun outputActivate(x: Double): Double = when (config.outputActivation) {
         OutputActivation.LINEAR -> x
         OutputActivation.SIGMOID -> 1.0 / (1.0 + exp(-x))
     }
 
-    /** Per-layer activations cached during a forward pass for use in backpropagation. */
     internal data class ForwardCache(
         val preActivations: Array<DoubleArray>,
         val activations: Array<DoubleArray>

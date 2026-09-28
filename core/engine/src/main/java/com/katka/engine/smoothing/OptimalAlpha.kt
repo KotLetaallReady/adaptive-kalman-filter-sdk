@@ -36,6 +36,5 @@ internal object OptimalAlpha {
         return alpha.coerceIn(0.0, 1.0)
     }
 
-    /** Euclidean norm of a 2-vector. */
     fun norm(v: DoubleArray): Double = sqrt(v[0] * v[0] + v[1] * v[1])
 }

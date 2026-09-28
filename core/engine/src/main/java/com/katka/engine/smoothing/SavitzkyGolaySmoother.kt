@@ -30,7 +30,6 @@ internal object SavitzkyGolaySmoother {
         return (s4 * sumX - s2 * sumT2X) / denom
     }
 
-    /** Applies [smoothCentre] independently to the x and y axes of a point window. */
     fun smoothCentre2D(points: List<DoubleArray>): DoubleArray {
         val xs = DoubleArray(points.size) { points[it][0] }
         val ys = DoubleArray(points.size) { points[it][1] }
