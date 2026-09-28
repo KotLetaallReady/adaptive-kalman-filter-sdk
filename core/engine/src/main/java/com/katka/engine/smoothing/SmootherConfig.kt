@@ -3,40 +3,28 @@ package com.katka.engine.smoothing
 /** How the smoother measures turn angles inside a window. */
 enum class TurnDetection {
     /**
-     * Bearing between consecutive Kalman points. At walking speed a one-second
-     * step is comparable to the filter jitter, so this reports turns on straight
-     * segments and while standing still. Kept only so models saved before the
-     * `v4` format keep their original features.
+     * Bearing between consecutive Kalman points. At walking speed it reports phantom turns;
+     * kept only so models saved before format `v4` keep their features.
      */
     POINT_DIFF,
 
-    /**
-     * Bearing of the Kalman velocity estimate. Samples slower than
-     * [SmootherConfig.minTurnSpeedMs] have no reliable heading and are skipped.
-     */
+    /** Bearing of the Kalman velocity; samples slower than [SmootherConfig.minTurnSpeedMs] are skipped. */
     VELOCITY
 }
 
 /**
- * Configuration for the fixed-lag neural trajectory smoother.
+ * Configuration of the fixed-lag neural smoother. Use the same config for
+ * [SmoothingTrainingCollector] and [NeuralTrajectorySmoother].
  *
- * Pass the same config to [SmoothingTrainingCollector] and
- * [NeuralTrajectorySmoother] when training and inference should use custom
- * smoothing behaviour. Models saved before the `v4` format load with
- * [TurnDetection.POINT_DIFF] so their features stay unchanged.
- *
- * @property windowLength Fixed-lag window length, also known as `L`. Larger
- * windows give Savitzky-Golay and the neural model more context, at the cost of
- * more output delay.
- * @property turnThresholdDeg Turn angles below this value are ignored when
- * computing turn suppression.
- * @property alphaSuppressionTurnDeg Turn angle that reduces the target alpha to
+ * @property windowLength Window length `L`; a longer window smooths more but delays the output
+ * by `L / 2` samples.
+ * @property turnThresholdDeg Turn angles below this value are ignored by turn suppression.
+ * @property alphaSuppressionTurnDeg Turn angle that lowers the target alpha to
  * [minTurnSuppression] during training.
- * @property minTurnSuppression Lower bound for the alpha suppression factor on
- * sharp turns.
+ * @property minTurnSuppression Lower bound for the alpha suppression factor on sharp turns.
  * @property turnDetection How turn angles are measured.
- * @property minTurnSpeedMs With [TurnDetection.VELOCITY], samples slower than
- * this speed (m/s) are ignored when measuring turns.
+ * @property minTurnSpeedMs With [TurnDetection.VELOCITY], samples slower than this speed (m/s)
+ * are ignored.
  */
 data class SmootherConfig(
     val windowLength: Int = DEFAULT_WINDOW_LENGTH,

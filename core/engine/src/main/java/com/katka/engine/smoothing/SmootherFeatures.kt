@@ -38,7 +38,6 @@ internal object SmootherFeatures {
     ): Double =
         turnAnglesDeg(window, config).filter { it > config.turnThresholdDeg }.sum()
 
-    /** Absolute turn angles in degrees between consecutive headings measured per [SmootherConfig.turnDetection]. */
     private fun turnAnglesDeg(window: List<SmootherInput>, config: SmootherConfig): List<Double> {
         if (window.size < 3) return emptyList()
 
@@ -62,7 +61,6 @@ internal object SmootherFeatures {
         return turns
     }
 
-    /** Lengths of consecutive Kalman-track steps. */
     private fun stepLengths(window: List<SmootherInput>): List<Double> {
         if (window.size < 2) return emptyList()
         val steps = ArrayList<Double>(window.size - 1)
@@ -74,7 +72,6 @@ internal object SmootherFeatures {
         return steps
     }
 
-    /** Population standard deviation. */
     private fun std(xs: List<Double>, mean: Double): Double {
         if (xs.size < 2) return 0.0
         val v = xs.sumOf { (it - mean) * (it - mean) } / xs.size
