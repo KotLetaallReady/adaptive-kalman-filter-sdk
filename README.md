@@ -183,12 +183,16 @@ Use a custom `SensorDataSource` when the host app already owns GPS, location rep
 ```kotlin
 import com.katka.data.ReplaySensorDataSource
 import com.katka.sdk.AdaptiveKalmanFilterSdk
+import com.katka.sdk.KalmanSdkConfig
 
 val kalmanSdk = AdaptiveKalmanFilterSdk.create(
     sensorSource = ReplaySensorDataSource(observations),
-    scope = scope
+    scope = scope,
+    config = KalmanSdkConfig(useWallClockTime = false)
 )
 ```
+
+For a recorded route, pass `useWallClockTime = false`: the filter then takes the time step only from `Observation.timestamp`. With the default `true` it also checks the system clock, which suits a live stream but makes a fast replay depend on how quickly the fixes are processed.
 
 ### Public API
 
@@ -198,10 +202,11 @@ val kalmanSdk = AdaptiveKalmanFilterSdk.create(
 - `Observation` - one GPS/IMU measurement consumed by the filter.
 - `SensorDataSource` - platform-independent stream of observations.
 - `AndroidSensorDataSource` - Android GPS/IMU implementation.
-- `KalmanFilter` - lower-level stateful Kalman filter.
+- `KalmanFilter` - lower-level stateful Kalman filter. After 3 fixes rejected in a row by the outlier gate it accepts the next one, so it cannot lose the track for good.
 - `KalmanFilterCoordinator` - session runner that exposes `Flow<FilterResult>`.
+- `CoefficientStrategy` - measurement-noise strategy interface; `KalmanFilter` passes it the innovation of every accepted fix through `onInnovation`.
 - `ClassicalCoefficientStrategy` - default adaptive measurement-noise strategy.
-- `MetricsEvaluator` - trajectory quality metrics.
+- `MetricsEvaluator` - trajectory quality metrics; points are paired by timestamp (`TimedPosition`), so a delayed smoother is scored correctly.
 - `NeuralTrajectorySmoother`, `SmoothingTrainingCollector`, `SmootherRepository` - optional neural smoothing pipeline.
 
 ### Diploma Materials
@@ -408,12 +413,16 @@ val smoother = NeuralTrajectorySmoother(
 ```kotlin
 import com.katka.data.ReplaySensorDataSource
 import com.katka.sdk.AdaptiveKalmanFilterSdk
+import com.katka.sdk.KalmanSdkConfig
 
 val kalmanSdk = AdaptiveKalmanFilterSdk.create(
     sensorSource = ReplaySensorDataSource(observations),
-    scope = scope
+    scope = scope,
+    config = KalmanSdkConfig(useWallClockTime = false)
 )
 ```
+
+Для записанного маршрута передайте `useWallClockTime = false`: тогда шаг времени фильтр берёт только из `Observation.timestamp`. При значении по умолчанию `true` он сверяется ещё и с системными часами. Для живого потока это подходит, но при быстром воспроизведении результат зависит от того, как быстро обрабатываются фиксы.
 
 ### Публичный API
 
@@ -423,10 +432,11 @@ val kalmanSdk = AdaptiveKalmanFilterSdk.create(
 - `Observation` - одно GPS/IMU-измерение для фильтра.
 - `SensorDataSource` - платформенно-независимый поток наблюдений.
 - `AndroidSensorDataSource` - Android-реализация GPS/IMU-источника.
-- `KalmanFilter` - низкоуровневый stateful фильтр Калмана.
+- `KalmanFilter` - низкоуровневый stateful фильтр Калмана. После 3 фиксов подряд, отброшенных гейтом выбросов, он принимает следующий и поэтому не может потерять трек навсегда.
 - `KalmanFilterCoordinator` - runner сессии, который отдаёт `Flow<FilterResult>`.
+- `CoefficientStrategy` - интерфейс стратегии шума измерений; `KalmanFilter` передаёт ей инновацию каждого принятого фикса через `onInnovation`.
 - `ClassicalCoefficientStrategy` - стандартная адаптивная стратегия шума измерений.
-- `MetricsEvaluator` - метрики качества траектории.
+- `MetricsEvaluator` - метрики качества траектории; точки сопоставляются по timestamp (`TimedPosition`), поэтому сглаживатель с задержкой оценивается правильно.
 - `NeuralTrajectorySmoother`, `SmoothingTrainingCollector`, `SmootherRepository` - нейросетевая pipeline сглаживания.
 
 ### Дипломные Материалы

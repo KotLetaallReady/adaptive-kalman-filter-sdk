@@ -92,7 +92,7 @@ class AdaptiveKalmanFilterSdk private constructor(
             logger: Logger = Logger.NoOp,
             smootherStore: SmootherStore? = null,
             strategy: CoefficientStrategy = config.createClassicalStrategy(),
-            filter: KalmanFilter = KalmanFilter(config.processNoiseStd)
+            filter: KalmanFilter = KalmanFilter(config.processNoiseStd, config.useWallClockTime)
         ): AdaptiveKalmanFilterSdk {
             val coordinator = KalmanFilterCoordinator(
                 sensorSource = sensorSource,

@@ -4,6 +4,9 @@ import com.katka.engine.smoothing.SmootherConfig
 
 /**
  * Runtime configuration for the default Android Kalman SDK setup.
+ *
+ * Set [useWallClockTime] to `false` when replaying recorded observations, so
+ * the filter time step comes only from observation timestamps.
  */
 data class KalmanSdkConfig(
     val gpsIntervalMs: Long = 1_000L,
@@ -16,7 +19,8 @@ data class KalmanSdkConfig(
     val forgettingB: Double = 0.97,
     val smootherConfig: SmootherConfig = SmootherConfig(),
     val smootherModelFileName: String = "neural_smoother.model",
-    val logcatTag: String = "KalmanLog"
+    val logcatTag: String = "KalmanLog",
+    val useWallClockTime: Boolean = true
 ) {
     init {
         require(gpsIntervalMs > 0L) { "gpsIntervalMs must be positive." }
