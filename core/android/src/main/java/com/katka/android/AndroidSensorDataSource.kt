@@ -158,7 +158,6 @@ class AndroidSensorDataSource(
         }
     }
 
-    /** Snapshots linear acceleration and the device rotation matrix as IMU events arrive. */
     override fun onSensorChanged(event: SensorEvent) {
         when (event.sensor.type) {
 
@@ -214,10 +213,8 @@ class AndroidSensorDataSource(
     }
 
     /**
-     * Acquires a wake lock and registers GPS and IMU listeners for a new session.
-     *
-     * This method expects location permission to have already been granted by
-     * the host application.
+     * Acquires a wake lock and registers GPS and IMU listeners. Location permission must already
+     * be granted by the host app.
      */
     @SuppressLint("MissingPermission")
     override fun start() {
@@ -241,7 +238,6 @@ class AndroidSensorDataSource(
         isRunning = true
     }
 
-    /** Requests high-accuracy updates from FusedLocationProvider. */
     @SuppressLint("MissingPermission")
     private fun startWithFused() {
         val locationRequest = LocationRequest.Builder(

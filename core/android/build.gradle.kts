@@ -2,8 +2,7 @@ plugins {
     alias(libs.plugins.android.library)
 }
 
-// Android adapters for the pure-JVM SDK core: implementations of SensorDataSource,
-// SmootherStore and Logger. This is the only core module that depends on Android.
+// Android adapters for the JVM core; the only core module that depends on Android.
 android {
     namespace = "com.katka.android"
     compileSdk {

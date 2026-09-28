@@ -7,7 +7,6 @@ internal class SmootherWindow(private val config: SmootherConfig = SmootherConfi
 
     val isFull: Boolean get() = buf.size >= config.windowLength
 
-    /** Appends a step, evicting the oldest once full. */
     fun push(input: SmootherInput) {
         if (buf.size >= config.windowLength) buf.removeFirst()
         buf.addLast(input)
@@ -15,7 +14,6 @@ internal class SmootherWindow(private val config: SmootherConfig = SmootherConfi
 
     fun clear() = buf.clear()
 
-    /** The central element of a full window, i.e. the point being smoothed. */
     fun centralInput(): SmootherInput = buf[config.halfWindow]
 
     /** Savitzky-Golay estimate over the Kalman points. */
@@ -24,10 +22,8 @@ internal class SmootherWindow(private val config: SmootherConfig = SmootherConfi
     /** Savitzky-Golay estimate over the raw GPS points used as pseudo-truth. */
     fun sgRaw(): DoubleArray = SavitzkyGolaySmoother.smoothCentre2D(rawPoints())
 
-    /** Raw, un-normalised feature vector for the current window. */
     fun rawFeatures(): DoubleArray = SmootherFeatures.extract(buf, config)
 
-    /** Turn-suppression angle for the optimal-alpha computation. */
     fun turnSuppressionPhiDeg(): Double = SmootherFeatures.suppressionAngleDeg(buf, config)
 
     private fun kfPoints(): List<DoubleArray> = buf.map { doubleArrayOf(it.kfX, it.kfY) }

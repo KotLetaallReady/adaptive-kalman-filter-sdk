@@ -3,8 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.jvm)
 }
 
-// Pure Kotlin/JVM module with the sensor-source abstraction
-// (Flow<Observation>). Android implementations live outside this module.
+// Sensor-source abstraction (Flow<Observation>), pure JVM.
 dependencies {
     api(project(":core:model"))
     api(libs.kotlinx.coroutines.core)

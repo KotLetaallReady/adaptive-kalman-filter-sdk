@@ -3,9 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.jvm)
 }
 
-// Pure Kotlin/JVM module: Kalman filter, neural trajectory smoother, metrics
-// and math. Android specifics are injected through interfaces and implemented
-// in :core:android or host applications.
+// Pure JVM engine: Kalman filter, smoother, metrics; Android parts come through interfaces.
 dependencies {
     api(project(":core:model"))
     api(project(":core:data"))
