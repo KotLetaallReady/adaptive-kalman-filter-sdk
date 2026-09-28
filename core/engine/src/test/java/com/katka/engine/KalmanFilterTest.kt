@@ -3,7 +3,9 @@ package com.katka.engine
 import com.katka.engine.coefficient_startegy.ClassicalCoefficientStrategy
 import com.katka.engine.coefficient_startegy.CoefficientStrategy
 import com.katka.engine.model.FilterResult
+import com.katka.engine.model.GainResult
 import com.katka.model.Observation
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -102,6 +104,48 @@ class KalmanFilterTest {
         }
         assertFalse(results[30 + KalmanFilter.GATE_RECOVERY_REJECTIONS].isRejected)
         assertEquals(100.0, results.last().state.x, 1.0)
+    }
+
+    @Test
+    fun strategy_receivesInnovationOfEveryAcceptedFix() {
+        val strategy = RecordingStrategy()
+        val track = standing(0..29) + fix(30_000L, 100.0, 0.0) + standing(31..39)
+
+        val results = KalmanFilter(useWallClockTime = false).run(track, strategy)
+
+        // Neither the initialising fix nor the gated outlier is reported.
+        val accepted = results.drop(1).filterNot { it.isRejected }
+        assertEquals(track.size - 2, strategy.innovations.size)
+        accepted.zip(strategy.innovations).forEach { (result, innovation) ->
+            assertArrayEquals(result.innovation, innovation, 0.0)
+        }
+    }
+
+    @Test
+    fun adaptiveR_learnsFromInnovations_whenFilterIsUsedDirectly() {
+        // The phone reports 2 m accuracy, but the real noise is 6 m per axis.
+        val rng = Random(3)
+        val track = (0 until 90).map { i ->
+            if (i == 0) fix(0L, 0.0, 0.0, accuracy = 2f)
+            else fix(i * 1000L, 6.0 * rng.nextGaussian(), 6.0 * rng.nextGaussian(), accuracy = 2f)
+        }
+        val strategy = ClassicalCoefficientStrategy(adaptiveR = true)
+
+        val r = KalmanFilter(useWallClockTime = false).run(track, strategy).last().measurementNoiseR[0][0]
+
+        assertTrue("R should grow above accuracy² = 4 m², got $r", r > 8.0)
+    }
+
+    private class RecordingStrategy : CoefficientStrategy {
+        private val delegate = ClassicalCoefficientStrategy()
+        val innovations = mutableListOf<DoubleArray>()
+
+        override fun computeGain(P_pred: Array<DoubleArray>, H: Array<DoubleArray>, obs: Observation): GainResult =
+            delegate.computeGain(P_pred, H, obs)
+
+        override fun onInnovation(innovation: DoubleArray, H: Array<DoubleArray>, P_pred: Array<DoubleArray>) {
+            innovations.add(innovation.copyOf())
+        }
     }
 
     private companion object {

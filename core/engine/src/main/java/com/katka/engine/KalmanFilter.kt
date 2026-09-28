@@ -68,7 +68,8 @@ class KalmanFilter(
      *
      * The first accepted observation initializes the local coordinate system and
      * returns an initial [FilterResult]. Later calls run the prediction and
-     * correction steps using the supplied [strategy].
+     * correction steps using the supplied [strategy], and pass the innovation
+     * of every accepted fix to [CoefficientStrategy.onInnovation].
      */
     fun process(obs: Observation, strategy: CoefficientStrategy): FilterResult {
         if (!isInitialised) {
@@ -166,6 +167,7 @@ class KalmanFilter(
             P  = gainResult.P_updated
         )
         state = posterior
+        strategy.onInnovation(innovation, H, PPred)
 
         return FilterResult(
             timestamp         = obs.timestamp,

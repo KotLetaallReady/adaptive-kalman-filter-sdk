@@ -1,7 +1,6 @@
 package com.katka.engine
 
 import com.katka.data.SensorDataSource
-import com.katka.engine.coefficient_startegy.ClassicalCoefficientStrategy
 import com.katka.engine.coefficient_startegy.CoefficientStrategy
 import com.katka.model.AccuracyMetrics
 import com.katka.engine.model.FilterMode
@@ -48,11 +47,6 @@ class KalmanFilterCoordinator(
     private val rawGpsHistory = mutableListOf<Pair<Double, Double>>()
 
     private var consecutiveGoodFixes = 0
-
-    private val H: Array<DoubleArray> = arrayOf(
-        doubleArrayOf(1.0, 0.0, 0.0, 0.0),
-        doubleArrayOf(0.0, 1.0, 0.0, 0.0)
-    )
 
     private var stepCount        = 0
     private var warningCount     = 0
@@ -212,14 +206,6 @@ class KalmanFilterCoordinator(
 
             val (rawX, rawY) = filter.geoToLocal(obs.latitude, obs.longitude)
             rawGpsHistory.add(rawX to rawY)
-
-            if (!isFirstObs && strategy is ClassicalCoefficientStrategy) {
-                strategy.updateInnovation(
-                    innovation = result.innovation,
-                    H          = H,
-                    P_pred     = result.predicted.P
-                )
-            }
 
             if (stepCount % LOG_EVERY_N_STEPS == 0) {
                 logFilterResult(result, rawX, rawY, gapMs)

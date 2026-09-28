@@ -25,6 +25,23 @@ interface CoefficientStrategy {
         obs: Observation
     ): GainResult
 
+    /**
+     * Receives the innovation of an accepted fix after [computeGain].
+     *
+     * [com.katka.engine.KalmanFilter.process] calls this once per accepted
+     * measurement update. Fixes rejected by the outlier gate are not reported.
+     * Override it to adapt the noise model from innovation statistics.
+     *
+     * @param innovation Measurement residual `z - Hx` against the prediction.
+     * @param H Measurement matrix used for the update.
+     * @param P_pred Predicted state covariance before the update.
+     */
+    fun onInnovation(
+        innovation: DoubleArray,
+        H: Array<DoubleArray>,
+        P_pred: Array<DoubleArray>
+    ) {}
+
     /** Clears internal adaptive state before a new tracking session starts. */
     fun reset() {}
 }

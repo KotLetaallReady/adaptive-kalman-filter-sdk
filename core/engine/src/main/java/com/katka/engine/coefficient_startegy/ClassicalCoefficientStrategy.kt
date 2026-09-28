@@ -31,7 +31,18 @@ class ClassicalCoefficientStrategy(
     private var stepCount = 0
 
     /** Feeds the innovation back into the Sage-Husa adaptive-R estimator (no-op unless [adaptiveR]). */
+    @Deprecated(
+        "KalmanFilter.process now calls onInnovation for every accepted fix. " +
+            "Calling this as well feeds the same innovation twice."
+    )
     fun updateInnovation(
+        innovation: DoubleArray,
+        H: Array<DoubleArray>,
+        P_pred: Array<DoubleArray>
+    ) = onInnovation(innovation, H, P_pred)
+
+    /** Feeds the innovation back into the Sage-Husa adaptive-R estimator (no-op unless [adaptiveR]). */
+    override fun onInnovation(
         innovation: DoubleArray,
         H: Array<DoubleArray>,
         P_pred: Array<DoubleArray>
