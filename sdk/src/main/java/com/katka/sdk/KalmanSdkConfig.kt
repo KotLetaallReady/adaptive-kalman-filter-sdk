@@ -25,7 +25,9 @@ data class KalmanSdkConfig(
     val rtsLag: Int = 5,
     val enableRtsSmoother: Boolean = true,
     val robustUpdate: Boolean = true,
-    val huberThreshold: Double = 2.45
+    val huberThreshold: Double = 2.45,
+    val useNeuralNoiseEstimator: Boolean = false,
+    val neuralNoiseModel: com.katka.engine.coefficient_startegy.PretrainedResidualModel = com.katka.engine.coefficient_startegy.PretrainedResidualModel.DEFAULT
 ) {
     init {
         require(gpsIntervalMs > 0L) { "gpsIntervalMs must be positive." }

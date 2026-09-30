@@ -131,7 +131,7 @@ class AdaptiveKalmanFilterSdk private constructor(
             dispatcher: CoroutineDispatcher = Dispatchers.Default,
             logger: Logger = Logger.NoOp,
             smootherStore: SmootherStore? = null,
-            strategy: CoefficientStrategy = config.createClassicalStrategy(),
+            strategy: CoefficientStrategy = config.createStrategy(),
             filter: KalmanFilter = KalmanFilter(config.processNoiseStd, config.useWallClockTime, config.useDoppler)
         ): AdaptiveKalmanFilterSdk {
             val rtsSmoother = if (config.enableRtsSmoother) FixedLagRtsSmoother(config.rtsLag) else null
@@ -155,15 +155,25 @@ class AdaptiveKalmanFilterSdk private constructor(
             )
         }
 
-        private fun KalmanSdkConfig.createClassicalStrategy(): ClassicalCoefficientStrategy =
-            ClassicalCoefficientStrategy(
-                minAccuracyM = minAccuracyM,
-                maxAccuracyM = maxAccuracyM,
-                adaptiveR = adaptiveR,
-                adaptiveWindow = adaptiveWindow,
-                forgettingB = forgettingB,
-                robustUpdate = robustUpdate,
-                huberThreshold = huberThreshold
-            )
+        private fun KalmanSdkConfig.createStrategy(): CoefficientStrategy =
+            if (useNeuralNoiseEstimator) {
+                com.katka.engine.coefficient_startegy.NeuralResidualNoiseStrategy(
+                    minAccuracyM = minAccuracyM,
+                    maxAccuracyM = maxAccuracyM,
+                    robustUpdate = robustUpdate,
+                    huberThreshold = huberThreshold,
+                    model = neuralNoiseModel
+                )
+            } else {
+                ClassicalCoefficientStrategy(
+                    minAccuracyM = minAccuracyM,
+                    maxAccuracyM = maxAccuracyM,
+                    adaptiveR = adaptiveR,
+                    adaptiveWindow = adaptiveWindow,
+                    forgettingB = forgettingB,
+                    robustUpdate = robustUpdate,
+                    huberThreshold = huberThreshold
+                )
+            }
     }
 }

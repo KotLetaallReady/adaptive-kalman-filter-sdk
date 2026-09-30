@@ -45,6 +45,8 @@ data class Observation(
     val hasRotation: Boolean = false,
     val speedAccuracy: Float = 0f,
     val bearingAccuracy: Float = 0f,
-    val provider: String
+    val provider: String,
+    val satellitesCount: Int = 0,
+    val meanCn0: Float = 0f
 )
 
