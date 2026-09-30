@@ -109,6 +109,8 @@ class AndroidSensorDataSource(
                 location.bearingAccuracyDegrees
             } else 0f
 
+            val (axGeo, ayGeo, rotValid) = computeGeoAcceleration()
+
             val observation = Observation(
                 timestamp       = location.time,
                 latitude        = location.latitude,
