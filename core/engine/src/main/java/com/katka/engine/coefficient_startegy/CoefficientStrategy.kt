@@ -23,6 +23,20 @@ interface CoefficientStrategy {
     ): GainResult
 
     /**
+     * Builds the gain, posterior covariance and measurement noise for a step,
+     * with optional innovation `z - Hx` from the forward prediction for robust
+     * M-estimation (e.g. Huber soft gate).
+     *
+     * Default implementation delegates to [computeGain] without innovation.
+     */
+    fun computeGain(
+        P_pred: Array<DoubleArray>,
+        H: Array<DoubleArray>,
+        obs: Observation,
+        innovation: DoubleArray?
+    ): GainResult = computeGain(P_pred, H, obs)
+
+    /**
      * Receives the innovation of every accepted fix right after [computeGain]; fixes rejected by
      * the outlier gate are not reported. Override it to adapt the noise model.
      *

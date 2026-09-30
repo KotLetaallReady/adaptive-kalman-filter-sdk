@@ -161,7 +161,9 @@ class AdaptiveKalmanFilterSdk private constructor(
                 maxAccuracyM = maxAccuracyM,
                 adaptiveR = adaptiveR,
                 adaptiveWindow = adaptiveWindow,
-                forgettingB = forgettingB
+                forgettingB = forgettingB,
+                robustUpdate = robustUpdate,
+                huberThreshold = huberThreshold
             )
     }
 }

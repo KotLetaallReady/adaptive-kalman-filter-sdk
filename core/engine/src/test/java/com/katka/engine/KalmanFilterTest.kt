@@ -221,6 +221,36 @@ class KalmanFilterTest {
         assertEquals(0.0, outlierResult.state.vy, 1.0)
     }
 
+    @Test
+    fun robustUpdate_boundsLateralError_onMultipathSpike() {
+        val track = (0..10).map { i ->
+            fixWithDoppler(i * 1000L, 5.0 * i, 0.0, speed = 5.0f, bearing = 90.0f)
+        }.toMutableList()
+
+        // 11th fix has a 12m lateral spike (below the 15m hard gate threshold, so it enters the update step)
+        track.add(fixWithDoppler(11000L, 55.0, 12.0, speed = 5.0f, bearing = 90.0f))
+
+        val nonRobustStrategy = ClassicalCoefficientStrategy(robustUpdate = false)
+        val robustStrategy = ClassicalCoefficientStrategy(robustUpdate = true, huberThreshold = 2.45)
+
+        val nonRobustFilter = KalmanFilter(processNoiseStd = 0.5, useWallClockTime = false, useDoppler = true)
+        val robustFilter = KalmanFilter(processNoiseStd = 0.5, useWallClockTime = false, useDoppler = true)
+
+        nonRobustFilter.reset(nonRobustStrategy)
+        robustFilter.reset(robustStrategy)
+
+        track.forEach { nonRobustFilter.process(it, nonRobustStrategy) }
+        track.forEach { robustFilter.process(it, robustStrategy) }
+
+        val nonRobustY = nonRobustFilter.getCurrentState()!!.y
+        val robustY = robustFilter.getCurrentState()!!.y
+
+        assertTrue(
+            "Robust filter lateral deviation ($robustY) should be strictly smaller than non-robust ($nonRobustY)",
+            robustY < nonRobustY
+        )
+    }
+
     private fun fixWithDoppler(
         tMs: Long,
         x: Double,
@@ -255,6 +285,9 @@ class KalmanFilterTest {
 
         override fun computeGain(P_pred: Array<DoubleArray>, H: Array<DoubleArray>, obs: Observation): GainResult =
             delegate.computeGain(P_pred, H, obs)
+
+        override fun computeGain(P_pred: Array<DoubleArray>, H: Array<DoubleArray>, obs: Observation, innovation: DoubleArray?): GainResult =
+            delegate.computeGain(P_pred, H, obs, innovation)
 
         override fun onInnovation(innovation: DoubleArray, H: Array<DoubleArray>, P_pred: Array<DoubleArray>) {
             innovations.add(innovation.copyOf())

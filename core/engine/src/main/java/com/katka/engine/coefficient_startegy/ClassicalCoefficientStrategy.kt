@@ -20,7 +20,9 @@ class ClassicalCoefficientStrategy(
     private val maxAccuracyM: Float = 50.0f,
     private val adaptiveR: Boolean = false,
     private val adaptiveWindow: Int = 20,
-    private val forgettingB: Double = 0.97
+    private val forgettingB: Double = 0.97,
+    val robustUpdate: Boolean = false,
+    val huberThreshold: Double = 2.45
 ) : CoefficientStrategy {
 
     private val innovationWindow = ArrayDeque<DoubleArray>(adaptiveWindow)
@@ -103,11 +105,31 @@ class ClassicalCoefficientStrategy(
         P_pred: Array<DoubleArray>,
         H: Array<DoubleArray>,
         obs: Observation
-    ): GainResult {
-        val R = computeR(obs, H, P_pred)
+    ): GainResult = computeGain(P_pred, H, obs, null)
 
+    override fun computeGain(
+        P_pred: Array<DoubleArray>,
+        H: Array<DoubleArray>,
+        obs: Observation,
+        innovation: DoubleArray?
+    ): GainResult {
         val HP   = MatrixOps.mul(H, P_pred)
         val HPHt = MatrixOps.mul(HP, MatrixOps.transpose(H))
+        var R    = computeR(obs, H, P_pred)
+
+        if (robustUpdate && innovation != null && innovation.size >= 2) {
+            val s00 = HPHt[0][0] + R[0][0]
+            val s11 = HPHt[1][1] + R[1][1]
+            val sMean = ((s00 + s11) / 2.0).coerceAtLeast(1e-4)
+            val sigmaS = kotlin.math.sqrt(sMean)
+            val nu = kotlin.math.hypot(innovation[0], innovation[1])
+            val u = nu / sigmaS
+            if (u > huberThreshold) {
+                val factor = u / huberThreshold
+                R = MatrixOps.scale(R, factor)
+            }
+        }
+
         val S    = MatrixOps.add(HPHt, R)
 
         val sScale = (S[0][0] + S[1][1]) / 2.0

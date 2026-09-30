@@ -23,7 +23,9 @@ data class KalmanSdkConfig(
     val useWallClockTime: Boolean = true,
     val useDoppler: Boolean = true,
     val rtsLag: Int = 5,
-    val enableRtsSmoother: Boolean = true
+    val enableRtsSmoother: Boolean = true,
+    val robustUpdate: Boolean = true,
+    val huberThreshold: Double = 2.45
 ) {
     init {
         require(gpsIntervalMs > 0L) { "gpsIntervalMs must be positive." }
@@ -36,5 +38,6 @@ data class KalmanSdkConfig(
         require(smootherModelFileName.isNotBlank()) { "smootherModelFileName must not be blank." }
         require(logcatTag.isNotBlank()) { "logcatTag must not be blank." }
         require(rtsLag >= 0) { "rtsLag must be non-negative." }
+        require(huberThreshold > 0.0) { "huberThreshold must be positive." }
     }
 }

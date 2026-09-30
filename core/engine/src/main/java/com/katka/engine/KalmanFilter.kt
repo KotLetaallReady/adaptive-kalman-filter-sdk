@@ -139,7 +139,7 @@ class KalmanFilter(
 
         consecutiveRejections = 0
 
-        val gainResult = strategy.computeGain(PPred, H, obs)
+        val gainResult = strategy.computeGain(PPred, H, obs, innovation)
         val K = gainResult.K
         val R = gainResult.R
 
