@@ -20,7 +20,7 @@ import kotlin.math.*
  * @param useDoppler `true` fuses GNSS Doppler speed and bearing when reported in observations.
  */
 class KalmanFilter(
-    private val processNoiseStd: Double = 0.5,
+    val processNoiseStd: Double = 0.5,
     private val useWallClockTime: Boolean = true,
     val useDoppler: Boolean = false
 ) {

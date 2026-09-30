@@ -6,6 +6,8 @@ import com.katka.model.AccuracyMetrics
 import com.katka.engine.model.FilterMode
 import com.katka.engine.model.FilterResult
 import com.katka.model.Observation
+import com.katka.engine.smoothing.rts.FixedLagRtsSmoother
+import com.katka.engine.smoothing.rts.SmoothedResult
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +27,7 @@ import kotlinx.coroutines.flow.*
  * @param dispatcher Dispatcher used for observation processing.
  * @param filterMode Label stored in diagnostics for the selected filter mode.
  * @param logger Optional logger for session diagnostics.
+ * @param rtsSmoother Optional fixed-lag RTS smoother for generating delayed smoothed points.
  */
 class KalmanFilterCoordinator(
     private val sensorSource: SensorDataSource,
@@ -33,7 +36,8 @@ class KalmanFilterCoordinator(
     private val scope: CoroutineScope,
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val filterMode: FilterMode = FilterMode.CLASSICAL,
-    private val logger: Logger = Logger.NoOp
+    private val logger: Logger = Logger.NoOp,
+    val rtsSmoother: FixedLagRtsSmoother? = null
 ) {
     private val Log = object {
         fun i(tag: String, m: String) = logger.i(m)
@@ -44,6 +48,8 @@ class KalmanFilterCoordinator(
 
     private val resultHistory = mutableListOf<FilterResult>()
     private val rawGpsHistory = mutableListOf<Pair<Double, Double>>()
+    private val smoothedHistory = mutableListOf<SmoothedResult>()
+    private val observationHistory = mutableMapOf<Long, Observation>()
 
     private var consecutiveGoodFixes = 0
 
@@ -59,7 +65,14 @@ class KalmanFilterCoordinator(
     val results: Flow<FilterResult> = flow {
         sensorSource.observations.collect { obs ->
             val result = processObservation(obs)
-            if (result != null) emit(result)
+            if (result != null) {
+                observationHistory[result.timestamp] = obs
+                if (observationHistory.size > 100) {
+                    val oldestKey = observationHistory.keys.first()
+                    observationHistory.remove(oldestKey)
+                }
+                emit(result)
+            }
         }
     }
         .flowOn(dispatcher)
@@ -70,11 +83,32 @@ class KalmanFilterCoordinator(
             replay  = 1
         )
 
+    /**
+     * Shared stream of fixed-lag RTS smoothed points.
+     * Each emitted point is delayed by [FixedLagRtsSmoother.lag] samples (typically 5 seconds)
+     * and provides optimal linear smoothing.
+     */
+    val smoothedResults: Flow<SmoothedResult> = results
+        .mapNotNull { result ->
+            val smoother = rtsSmoother ?: return@mapNotNull null
+            val obs = observationHistory[result.timestamp]
+            smoother.push(result, filter, obs)
+        }
+        .onEach { smoothed -> smoothedHistory.add(smoothed) }
+        .shareIn(
+            scope   = scope,
+            started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 5_000L),
+            replay  = 1
+        )
+
     /** Resets state and starts the sensor source for a new session. */
     fun start() {
         filter.reset(strategy)
+        rtsSmoother?.reset()
         resultHistory.clear()
         rawGpsHistory.clear()
+        smoothedHistory.clear()
+        observationHistory.clear()
         stepCount             = 0
         warningCount          = 0
         sessionStartMs        = System.currentTimeMillis()
@@ -96,6 +130,8 @@ class KalmanFilterCoordinator(
     /** Stops the sensor source and logs a session summary. */
     fun stop() {
         sensorSource.stop()
+        val flushed = rtsSmoother?.flush(filter) ?: emptyList()
+        smoothedHistory.addAll(flushed)
 
         val durationSec = (System.currentTimeMillis() - sessionStartMs) / 1000.0
 
@@ -157,6 +193,9 @@ class KalmanFilterCoordinator(
 
     /** Snapshot of all raw GPS positions (local metres) produced this session. */
     fun getRawGpsHistory(): List<Pair<Double, Double>> = rawGpsHistory.toList()
+
+    /** Snapshot of all smoothed RTS points produced this session. */
+    fun getSmoothedHistory(): List<SmoothedResult> = smoothedHistory.toList()
 
     /** Validates one observation (warm-up, dedup, dt gating) and runs a single filter step. */
     private fun processObservation(obs: Observation): FilterResult? {

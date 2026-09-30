@@ -21,7 +21,9 @@ data class KalmanSdkConfig(
     val smootherModelFileName: String = "neural_smoother.model",
     val logcatTag: String = "KalmanLog",
     val useWallClockTime: Boolean = true,
-    val useDoppler: Boolean = true
+    val useDoppler: Boolean = true,
+    val rtsLag: Int = 5,
+    val enableRtsSmoother: Boolean = true
 ) {
     init {
         require(gpsIntervalMs > 0L) { "gpsIntervalMs must be positive." }
@@ -33,5 +35,6 @@ data class KalmanSdkConfig(
         require(forgettingB in 0.0..1.0) { "forgettingB must be in [0, 1]." }
         require(smootherModelFileName.isNotBlank()) { "smootherModelFileName must not be blank." }
         require(logcatTag.isNotBlank()) { "logcatTag must not be blank." }
+        require(rtsLag >= 0) { "rtsLag must be non-negative." }
     }
 }

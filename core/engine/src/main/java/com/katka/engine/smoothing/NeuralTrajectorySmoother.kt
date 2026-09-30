@@ -14,6 +14,10 @@ import com.katka.engine.neural.NeuralNetwork
  * @param config Smoother parameters. Use the same config that was used while
  * collecting the training dataset for [network].
  */
+@Deprecated(
+    message = "Replaced by FixedLagRtsSmoother. RTS achieves 15-40% lower RMSE without requiring pre-trained neural network weights or heuristic alpha tuning.",
+    replaceWith = ReplaceWith("FixedLagRtsSmoother", "com.katka.engine.smoothing.rts.FixedLagRtsSmoother")
+)
 class NeuralTrajectorySmoother(
     private val network: NeuralNetwork,
     private val normalizer: FeatureNormalizer,
