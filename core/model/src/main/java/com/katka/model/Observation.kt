@@ -22,6 +22,8 @@ package com.katka.model
  * @property ayGeo North-facing acceleration after rotation into the geographic frame.
  * @property hasImu Whether acceleration data is available for this observation.
  * @property hasRotation Whether device rotation was available for geographic acceleration.
+ * @property speedAccuracy Estimated speed accuracy in metres per second, or `0f` when unavailable.
+ * @property bearingAccuracy Estimated bearing accuracy in degrees, or `0f` when unavailable.
  * @property provider Name of the location provider that produced the GPS fix.
  */
 data class Observation(
@@ -41,5 +43,8 @@ data class Observation(
     val ayGeo: Double = 0.0,
     val hasImu: Boolean,
     val hasRotation: Boolean = false,
+    val speedAccuracy: Float = 0f,
+    val bearingAccuracy: Float = 0f,
     val provider: String
 )
+

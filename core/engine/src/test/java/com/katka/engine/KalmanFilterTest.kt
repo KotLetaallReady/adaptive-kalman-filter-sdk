@@ -135,6 +135,120 @@ class KalmanFilterTest {
         assertTrue("R should grow above accuracy² = 4 m², got $r", r > 8.0)
     }
 
+    @Test
+    fun doppler_correctsVelocity_whenMovingEast() {
+        // Moving East at 5 m/s (bearing = 90 deg)
+        val track = (0..10).map { i ->
+            fixWithDoppler(
+                tMs = i * 1000L,
+                x = 5.0 * i,
+                y = 0.0,
+                speed = 5.0f,
+                bearing = 90.0f,
+                speedAccuracy = 0.2f,
+                bearingAccuracy = 1.0f
+            )
+        }
+        val results = KalmanFilter(useWallClockTime = false, useDoppler = true).run(track)
+        val lastState = results.last().state
+
+        // In our local frame, East is positive X. vx should be close to 5.0, vy close to 0.0
+        assertEquals(5.0, lastState.vx, 0.5)
+        assertEquals(0.0, lastState.vy, 0.5)
+    }
+
+    @Test
+    fun doppler_dampsZeroVelocity_whenStanding() {
+        val track = (0..10).map { i ->
+            fixWithDoppler(
+                tMs = i * 1000L,
+                x = 0.0,
+                y = 0.0,
+                speed = 0.0f,
+                bearing = 0.0f,
+                speedAccuracy = 0.1f,
+                bearingAccuracy = 0.0f
+            )
+        }
+        val results = KalmanFilter(useWallClockTime = false, useDoppler = true).run(track)
+        val lastState = results.last().state
+
+        assertEquals(0.0, lastState.vx, 0.1)
+        assertEquals(0.0, lastState.vy, 0.1)
+    }
+
+    @Test
+    fun doppler_canBeDisabled_viaConstructor() {
+        val track = (0..10).map { i ->
+            fixWithDoppler(
+                tMs = i * 1000L,
+                x = 5.0 * i,
+                y = 0.0,
+                speed = 0.0f, // false zero speed report
+                bearing = 0.0f,
+                speedAccuracy = 0.1f,
+                bearingAccuracy = 0.0f
+            )
+        }
+        val withDoppler = KalmanFilter(useWallClockTime = false, useDoppler = true).run(track).last().state
+        val withoutDoppler = KalmanFilter(useWallClockTime = false, useDoppler = false).run(track).last().state
+
+        // Without Doppler, the filter infers ~5 m/s from positions alone
+        assertTrue("Without Doppler vx should be around 5 m/s, got ${withoutDoppler.vx}", withoutDoppler.vx > 4.0)
+        // With Doppler forced to 0, vx is damped towards 0
+        assertTrue("With Doppler vx should be damped towards 0, got ${withDoppler.vx}", withDoppler.vx < withoutDoppler.vx)
+    }
+
+    @Test
+    fun doppler_updatesVelocity_whenPositionOutlierIsGated() {
+        val track = (0..5).map { i ->
+            fixWithDoppler(i * 1000L, 5.0 * i, 0.0, speed = 5.0f, bearing = 90.0f)
+        }.toMutableList()
+
+        // 6th fix is an outlier in position (jump of 100m north), but Doppler speed is still 5 m/s East
+        track.add(fixWithDoppler(6000L, 30.0, 100.0, speed = 5.0f, bearing = 90.0f))
+
+        val results = KalmanFilter(useWallClockTime = false, useDoppler = true).run(track)
+        val outlierResult = results.last()
+
+        // Position was rejected by gate: position gain is zero and coordinates did not jump to the 100m outlier
+        assertTrue("Position Kalman gain should be zero when gated", outlierResult.kalmanGain.all { r -> r.all { it == 0.0 } })
+        assertEquals("X coordinate should stay near 30m", 30.0, outlierResult.state.x, 1.0)
+        assertEquals("Y coordinate should not jump to 100m outlier", 0.0, outlierResult.state.y, 1.0)
+
+        // Velocity should still be updated by Doppler to ~5 m/s East instead of exploding North
+        assertEquals(5.0, outlierResult.state.vx, 1.0)
+        assertEquals(0.0, outlierResult.state.vy, 1.0)
+    }
+
+    private fun fixWithDoppler(
+        tMs: Long,
+        x: Double,
+        y: Double,
+        speed: Float,
+        bearing: Float,
+        speedAccuracy: Float = 0.2f,
+        bearingAccuracy: Float = 2.0f,
+        accuracy: Float = 4f
+    ) = Observation(
+        timestamp = tMs,
+        latitude = refLat + Math.toDegrees(y / EARTH_RADIUS_M),
+        longitude = refLon + Math.toDegrees(x / (EARTH_RADIUS_M * cos(Math.toRadians(refLat)))),
+        accuracy = accuracy,
+        altitude = 0.0,
+        speed = speed,
+        bearing = bearing,
+        hasSpeed = true,
+        hasBearing = speed > 0.5f,
+        ax = 0.0,
+        ay = 0.0,
+        az = 0.0,
+        hasImu = false,
+        speedAccuracy = speedAccuracy,
+        bearingAccuracy = bearingAccuracy,
+        provider = "gps"
+    )
+
     private class RecordingStrategy : CoefficientStrategy {
         private val delegate = ClassicalCoefficientStrategy()
         val innovations = mutableListOf<DoubleArray>()
@@ -151,3 +265,4 @@ class KalmanFilterTest {
         const val EARTH_RADIUS_M = 6_371_000.0
     }
 }
+

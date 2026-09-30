@@ -5,7 +5,7 @@ import com.katka.engine.model.FilterMode
 import com.katka.engine.model.FilterResult
 import com.katka.engine.model.KalmanState
 import com.katka.model.Observation
-import kotlin.math.cos
+import kotlin.math.*
 
 /**
  * Kalman filter for 2D position tracking with a constant-velocity model.
@@ -17,10 +17,12 @@ import kotlin.math.cos
  * @param processNoiseStd Process noise std; larger values follow manoeuvres faster but smooth less.
  * @param useWallClockTime `true` cross-checks the time step against the system clock (live
  * stream); `false` takes it only from [Observation.timestamp], which makes replays deterministic.
+ * @param useDoppler `true` fuses GNSS Doppler speed and bearing when reported in observations.
  */
 class KalmanFilter(
     private val processNoiseStd: Double = 0.5,
-    private val useWallClockTime: Boolean = true
+    private val useWallClockTime: Boolean = true,
+    val useDoppler: Boolean = false
 ) {
     private var state: KalmanState? = null
     private var lastTimestamp: Long = -1L
@@ -109,7 +111,11 @@ class KalmanFilter(
 
         if (innovationMag > gateThreshold && consecutiveRejections < GATE_RECOVERY_REJECTIONS) {
             consecutiveRejections++
-            state = xPred
+            var rejectedState = xPred
+            if (useDoppler && obs.hasSpeed) {
+                rejectedState = updateVelocity(rejectedState, obs)
+            }
+            state = rejectedState
             val zeroK = MatrixOps.zeros(KalmanState.DIM, 2)
             val Rgate = MatrixOps.diagonal(doubleArrayOf(
                 (obs.accuracy * obs.accuracy).toDouble().coerceAtLeast(1.0),
@@ -120,7 +126,7 @@ class KalmanFilter(
             val Sgate = MatrixOps.add(HPHt, Rgate)
             return FilterResult(
                 timestamp         = obs.timestamp,
-                state             = xPred,
+                state             = rejectedState,
                 predicted         = xPred,
                 innovation        = innovation,
                 innovationCovS    = Sgate,
@@ -148,11 +154,14 @@ class KalmanFilter(
         xNew[2] = xNew[2].coerceIn(-maxSpeedMs, maxSpeedMs)
         xNew[3] = xNew[3].coerceIn(-maxSpeedMs, maxSpeedMs)
 
-        val posterior = KalmanState(
+        var posterior = KalmanState(
             x  = xNew[0], y  = xNew[1],
             vx = xNew[2], vy = xNew[3],
             P  = gainResult.P_updated
         )
+        if (useDoppler && obs.hasSpeed) {
+            posterior = updateVelocity(posterior, obs)
+        }
         state = posterior
         strategy.onInnovation(innovation, H, PPred)
 
@@ -197,7 +206,10 @@ class KalmanFilter(
         consecutiveRejections = 0
 
         val posVariance = (obs.accuracy * obs.accuracy).toDouble().coerceAtLeast(1.0)
-        val initState = KalmanState.initial(x = 0.0, y = 0.0, posVariance = posVariance)
+        var initState = KalmanState.initial(x = 0.0, y = 0.0, posVariance = posVariance)
+        if (useDoppler && obs.hasSpeed) {
+            initState = updateVelocity(initState, obs)
+        }
         state = initState
 
         val zeroR = MatrixOps.zeros(2, 2)
@@ -267,6 +279,112 @@ class KalmanFilter(
         )
         return xPred to PPred
     }
+
+    private fun updateVelocity(
+        currentState: KalmanState,
+        obs: Observation
+    ): KalmanState {
+        val s = obs.speed.toDouble()
+        val sa = if (obs.speedAccuracy > 0.05f) obs.speedAccuracy.toDouble() else 0.25
+
+        val zv: DoubleArray
+        val Rv: Array<DoubleArray>
+
+        if (obs.hasBearing && s > 0.5) {
+            val psi = wrapAngle(Math.toRadians(90.0 - obs.bearing.toDouble()))
+            val cosPsi = cos(psi)
+            val sinPsi = sin(psi)
+
+            val bRad = if (obs.bearingAccuracy > 0.05f) {
+                Math.toRadians(obs.bearingAccuracy.toDouble())
+            } else {
+                (sa / s).coerceIn(0.02, PI / 2)
+            }
+
+            zv = doubleArrayOf(s * cosPsi, s * sinPsi)
+
+            val j00 = cosPsi
+            val j01 = -s * sinPsi
+            val j10 = sinPsi
+            val j11 = s * cosPsi
+
+            val sVar = sa * sa
+            val bVar = bRad * bRad
+
+            val r00 = j00 * j00 * sVar + j01 * j01 * bVar + 1e-6
+            val r01 = j00 * j10 * sVar + j01 * j11 * bVar
+            val r11 = j10 * j10 * sVar + j11 * j11 * bVar + 1e-6
+
+            Rv = arrayOf(
+                doubleArrayOf(r00, r01),
+                doubleArrayOf(r01, r11)
+            )
+        } else {
+            val vVar = (s * s + sa * sa).coerceAtLeast(0.01)
+            zv = doubleArrayOf(0.0, 0.0)
+            Rv = arrayOf(
+                doubleArrayOf(vVar, 0.0),
+                doubleArrayOf(0.0, vVar)
+            )
+        }
+
+        val x = currentState.toVector()
+        val P = currentState.P
+
+        val y0 = zv[0] - x[2]
+        val y1 = zv[1] - x[3]
+
+        val s00 = P[2][2] + Rv[0][0]
+        val s01 = P[2][3] + Rv[0][1]
+        val s10 = P[3][2] + Rv[1][0]
+        val s11 = P[3][3] + Rv[1][1]
+
+        val det = s00 * s11 - s01 * s10
+        if (abs(det) < 1e-12) return currentState
+
+        val invS00 = s11 / det
+        val invS01 = -s01 / det
+        val invS10 = -s10 / det
+        val invS11 = s00 / det
+
+        val K = Array(KalmanState.DIM) { r ->
+            val pR2 = P[r][2]
+            val pR3 = P[r][3]
+            doubleArrayOf(
+                pR2 * invS00 + pR3 * invS10,
+                pR2 * invS01 + pR3 * invS11
+            )
+        }
+
+        val xNew = DoubleArray(KalmanState.DIM) { r ->
+            x[r] + K[r][0] * y0 + K[r][1] * y1
+        }
+
+        val maxSpeedMs = 15.0
+        xNew[2] = xNew[2].coerceIn(-maxSpeedMs, maxSpeedMs)
+        xNew[3] = xNew[3].coerceIn(-maxSpeedMs, maxSpeedMs)
+
+        val IKH = MatrixOps.identity(KalmanState.DIM)
+        for (r in 0 until KalmanState.DIM) {
+            IKH[r][2] -= K[r][0]
+            IKH[r][3] -= K[r][1]
+        }
+
+        val term1 = MatrixOps.mul(MatrixOps.mul(IKH, P), MatrixOps.transpose(IKH))
+        val term2 = MatrixOps.mul(MatrixOps.mul(K, Rv), MatrixOps.transpose(K))
+        val Pnew = MatrixOps.symmetrise(MatrixOps.add(term1, term2))
+
+        return KalmanState(
+            x = xNew[0],
+            y = xNew[1],
+            vx = xNew[2],
+            vy = xNew[3],
+            P = Pnew
+        )
+    }
+
+    private fun wrapAngle(rad: Double): Double =
+        atan2(sin(rad), cos(rad))
 
     companion object {
         private const val EARTH_RADIUS_M = 6_371_000.0

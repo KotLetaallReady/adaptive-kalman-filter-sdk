@@ -8,6 +8,7 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.location.LocationListener
 import android.location.LocationManager
+import android.os.Build
 import android.os.Looper
 import android.os.PowerManager
 import com.google.android.gms.common.ConnectionResult
@@ -101,26 +102,33 @@ class AndroidSensorDataSource(
                 tryAlignYaw(location.bearing, location.speed)
             }
 
-            val (axGeo, ayGeo, rotValid) = computeGeoAcceleration()
+            val speedAcc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && location.hasSpeedAccuracy()) {
+                location.speedAccuracyMetersPerSecond
+            } else 0f
+            val bearingAcc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && location.hasBearingAccuracy()) {
+                location.bearingAccuracyDegrees
+            } else 0f
 
             val observation = Observation(
-                timestamp   = location.time,
-                latitude    = location.latitude,
-                longitude   = location.longitude,
-                accuracy    = location.accuracy,
-                altitude    = if (location.hasAltitude()) location.altitude else 0.0,
-                speed       = if (location.hasSpeed())    location.speed    else 0f,
-                bearing     = if (location.hasBearing())  location.bearing  else 0f,
-                hasSpeed    = location.hasSpeed(),
-                hasBearing  = location.hasBearing(),
-                ax          = latestAx,
-                ay          = latestAy,
-                az          = latestAz,
-                axGeo       = axGeo,
-                ayGeo       = ayGeo,
-                hasImu      = hasImu,
-                hasRotation = rotValid,
-                provider    = location.provider ?: "fused"
+                timestamp       = location.time,
+                latitude        = location.latitude,
+                longitude       = location.longitude,
+                accuracy        = location.accuracy,
+                altitude        = if (location.hasAltitude()) location.altitude else 0.0,
+                speed           = if (location.hasSpeed())    location.speed    else 0f,
+                bearing         = if (location.hasBearing())  location.bearing  else 0f,
+                hasSpeed        = location.hasSpeed(),
+                hasBearing      = location.hasBearing(),
+                ax              = latestAx,
+                ay              = latestAy,
+                az              = latestAz,
+                axGeo           = axGeo,
+                ayGeo           = ayGeo,
+                hasImu          = hasImu,
+                hasRotation     = rotValid,
+                speedAccuracy   = speedAcc,
+                bearingAccuracy = bearingAcc,
+                provider        = location.provider ?: "fused"
             )
             _observations.tryEmit(observation)
         }
@@ -135,24 +143,33 @@ class AndroidSensorDataSource(
 
             val (axGeo, ayGeo, rotValid) = computeGeoAcceleration()
 
+            val speedAcc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && location.hasSpeedAccuracy()) {
+                location.speedAccuracyMetersPerSecond
+            } else 0f
+            val bearingAcc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && location.hasBearingAccuracy()) {
+                location.bearingAccuracyDegrees
+            } else 0f
+
             val observation = Observation(
-                timestamp   = location.time,
-                latitude    = location.latitude,
-                longitude   = location.longitude,
-                accuracy    = location.accuracy,
-                altitude    = if (location.hasAltitude()) location.altitude else 0.0,
-                speed       = if (location.hasSpeed())    location.speed    else 0f,
-                bearing     = if (location.hasBearing())  location.bearing  else 0f,
-                hasSpeed    = location.hasSpeed(),
-                hasBearing  = location.hasBearing(),
-                ax          = latestAx,
-                ay          = latestAy,
-                az          = latestAz,
-                axGeo       = axGeo,
-                ayGeo       = ayGeo,
-                hasImu      = hasImu,
-                hasRotation = rotValid,
-                provider    = location.provider ?: "gps"
+                timestamp       = location.time,
+                latitude        = location.latitude,
+                longitude       = location.longitude,
+                accuracy        = location.accuracy,
+                altitude        = if (location.hasAltitude()) location.altitude else 0.0,
+                speed           = if (location.hasSpeed())    location.speed    else 0f,
+                bearing         = if (location.hasBearing())  location.bearing  else 0f,
+                hasSpeed        = location.hasSpeed(),
+                hasBearing      = location.hasBearing(),
+                ax              = latestAx,
+                ay              = latestAy,
+                az              = latestAz,
+                axGeo           = axGeo,
+                ayGeo           = ayGeo,
+                hasImu          = hasImu,
+                hasRotation     = rotValid,
+                speedAccuracy   = speedAcc,
+                bearingAccuracy = bearingAcc,
+                provider        = location.provider ?: "gps"
             )
             _observations.tryEmit(observation)
         }

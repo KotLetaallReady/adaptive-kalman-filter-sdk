@@ -20,7 +20,8 @@ data class KalmanSdkConfig(
     val smootherConfig: SmootherConfig = SmootherConfig(),
     val smootherModelFileName: String = "neural_smoother.model",
     val logcatTag: String = "KalmanLog",
-    val useWallClockTime: Boolean = true
+    val useWallClockTime: Boolean = true,
+    val useDoppler: Boolean = true
 ) {
     init {
         require(gpsIntervalMs > 0L) { "gpsIntervalMs must be positive." }
