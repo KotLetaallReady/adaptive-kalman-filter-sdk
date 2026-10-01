@@ -30,11 +30,15 @@ class PretrainedResidualModel(
         require(w3.size == w2.size) { "Output layer must take ${w2.size} inputs" }
     }
 
-    /** Forward pass for one feature vector of size [FEATURES]; returns the unclamped Δ ln R. */
+    /**
+     * Forward pass for one feature vector of size [FEATURES]; returns the unclamped Δ ln R. Normalised
+     * features are clipped to ±[MAX_Z] so inputs outside the training data (e.g. car speeds) are not extrapolated.
+     */
     fun predict(features: DoubleArray): Double {
+        val z = DoubleArray(FEATURES) { j -> ((features[j] - mean[j]) / std[j]).coerceIn(-MAX_Z, MAX_Z) }
         val h1 = DoubleArray(w1.size) { i ->
             var s = b1[i]
-            for (j in 0 until FEATURES) s += w1[i][j] * (features[j] - mean[j]) / std[j]
+            for (j in 0 until FEATURES) s += w1[i][j] * z[j]
             max(0.0, s)
         }
         var out = b3
@@ -49,6 +53,9 @@ class PretrainedResidualModel(
     companion object {
         /** Number of input features. */
         const val FEATURES = 5
+
+        /** Normalised features are clipped to ±MAX_Z standard deviations of the training data. */
+        const val MAX_Z = 3.0
 
         /**
          * Model trained by `./gradlew :benchmarks:run --args="noise-train"`: self-training (3 rounds) on the

@@ -85,7 +85,7 @@ class NeuralResidualNoiseStrategyTest {
         )
         repeat(100) {
             val x = DoubleArray(5) { rng.nextGaussian() * 2 }
-            val xn = DoubleArray(5) { (x[it] - m.mean[it]) / m.std[it] }
+            val xn = DoubleArray(5) { ((x[it] - m.mean[it]) / m.std[it]).coerceIn(-3.0, 3.0) }
             val h1 = DoubleArray(16) { i -> max(0.0, m.b1[i] + (0 until 5).sumOf { j -> m.w1[i][j] * xn[j] }) }
             val h2 = DoubleArray(8) { i -> max(0.0, m.b2[i] + (0 until 16).sumOf { j -> m.w2[i][j] * h1[j] }) }
             assertEquals(m.b3 + (0 until 8).sumOf { m.w3[it] * h2[it] }, m.predict(x), 1e-12)
