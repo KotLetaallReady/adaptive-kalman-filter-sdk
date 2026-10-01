@@ -3,47 +3,45 @@ package com.katka.engine.coefficient_startegy
 import com.katka.engine.MatrixOps
 import com.katka.engine.model.GainResult
 import com.katka.model.Observation
-import kotlin.math.*
+import kotlin.math.abs
+import kotlin.math.exp
+import kotlin.math.hypot
+import kotlin.math.ln
+import kotlin.math.max
+import kotlin.math.sqrt
 
 /**
- * Neural Residual Measurement Noise Strategy.
+ * Measurement-noise strategy with a learned correction of the reported GPS accuracy:
+ * `R = accuracy² · exp(clamp(model(features), -1.0, 2.5))`, i.e. between 0.37x and 12.2x the
+ * accuracy-based variance. The model sees only past innovations, so it stays causal (0 s delay);
+ * it was trained to match the residuals of the robust offline smoother (see [PretrainedResidualModel]).
  *
- * Transfers the high accuracy of offline Rauch-Tung-Striebel (RTS) smoothing into real-time
- * 0-second delay filtering via teacher-student knowledge distillation.
- *
- * The neural network predicts a causal residual scaling factor:
- * `R_eff = R_raw * exp(clamp(MLP(features), -1.0, 2.5))`
- *
- * Guarantees:
- * - When conditions are nominal, the neural residual is ~0, so `exp(0) = 1.0` (matching classical filter).
- * - During severe multipath or false reported accuracy, the network inflates R by up to 12.2x (`exp(2.5)`),
- *   protecting the filter from wild position jumps.
- * - The lower clamp of -1.0 (`exp(-1.0) ~ 0.368`) prevents covariance collapse and overconfidence.
- * - Integrated Huber soft gate as secondary M-estimator defense.
- * - Zero allocations per step: all inference, matrix computations, and ring buffer metrics run in-place.
+ * An optional Huber soft gate then inflates `R` further for a single outlying fix.
  *
  * @param minAccuracyM Lower clamp on reported GPS accuracy.
  * @param maxAccuracyM Upper clamp on reported GPS accuracy.
- * @param robustUpdate Whether to apply Huber soft gating on innovation outliers.
- * @param huberThreshold Mahalanobis distance threshold c for Huber scaling (2.45 is 95% chi2_2).
- * @param model Distilled neural network model (defaults to [PretrainedResidualModel.DEFAULT]).
+ * @param robustUpdate Whether to apply the Huber soft gate on large innovations.
+ * @param huberThreshold Mahalanobis distance threshold for the Huber gate (2.45 is 95% of χ²₂).
+ * @param model Noise model, [PretrainedResidualModel.DEFAULT] by default.
  */
 class NeuralResidualNoiseStrategy(
     val minAccuracyM: Float = 1.0f,
-    val maxAccuracyM: Float = 150.0f,
+    val maxAccuracyM: Float = 50.0f,
     val robustUpdate: Boolean = true,
     val huberThreshold: Double = 2.45,
     val model: PretrainedResidualModel = PretrainedResidualModel.DEFAULT
 ) : CoefficientStrategy {
 
-    companion object {
-        private const val HISTORY_CAPACITY = 10
-    }
-
-    // Circular ring buffer for innovation magnitudes: 0-allocation
     private val nuHistory = DoubleArray(HISTORY_CAPACITY)
     private var nuHead = 0
     private var nuCount = 0
+
+    /** Features of the last [computeGain] call, for training and diagnostics. */
+    internal val lastFeatures = DoubleArray(PretrainedResidualModel.FEATURES)
+
+    /** Clamped model output of the last [computeGain] call. */
+    internal var lastDelta = 0.0
+        private set
 
     override fun computeGain(
         P_pred: Array<DoubleArray>,
@@ -57,83 +55,36 @@ class NeuralResidualNoiseStrategy(
         obs: Observation,
         innovation: DoubleArray?
     ): GainResult {
-        // 1. Raw baseline variance from GPS accuracy
         val clampedAcc = obs.accuracy.coerceIn(minAccuracyM, maxAccuracyM).toDouble()
         val rRaw = (clampedAcc * clampedAcc).coerceAtLeast(1.0)
 
-        // 2. Extract causal features (past 10 steps statistics, speed, uncertainty, GNSS status)
-        val lnAcc = ln(clampedAcc)
-        val (meanNu, stdNu) = computeInnovationStats()
-        val lnMeanNu = ln(1.0 + meanNu)
-        val lnStdNu = ln(1.0 + stdNu)
-        val speed = if (obs.hasSpeed) obs.speed.toDouble() else 0.0
-        val sigmaPos = sqrt((P_pred[0][0] + P_pred[1][1]).coerceAtLeast(0.01))
-        val lnSigmaPos = ln(sigmaPos)
+        fillFeatures(obs, P_pred, clampedAcc)
+        val delta = model.predict(lastFeatures)
+        lastDelta = if (delta.isFinite()) delta.coerceIn(MIN_DELTA, MAX_DELTA) else 0.0
+        var rEff = rRaw * exp(lastDelta)
 
-        val cn0 = if (obs.meanCn0 > 5f) obs.meanCn0.toDouble() else 31.5
-        val satCount = if (obs.satellitesCount > 0) obs.satellitesCount.toDouble() else 12.0
+        val PHt = MatrixOps.mul(P_pred, MatrixOps.transpose(H))
+        val HPHt = MatrixOps.mul(H, PHt)
 
-        // 3. Fast zero-allocation inference of log-residual
-        val rawDelta = model.predict(
-            lnAcc = lnAcc,
-            lnMeanNu = lnMeanNu,
-            lnStdNu = lnStdNu,
-            speed = speed,
-            lnSigmaPos = lnSigmaPos,
-            cn0 = cn0,
-            satCount = satCount
-        )
-
-        // 4. Clamped residual multiplier: bounds noise scaling to [exp(-1.0), exp(2.5)] = [0.368, 12.18]
-        val clampedDelta = if (rawDelta.isNaN() || rawDelta.isInfinite()) 0.0 else rawDelta.coerceIn(-1.0, 2.5)
-        var rEff = (rRaw * exp(clampedDelta)).coerceIn(1.0, 25_000.0)
-
-        var R = MatrixOps.diagonal(doubleArrayOf(rEff, rEff))
-
-        // 5. Initial Kalman gain and innovation covariance S
-        var PHt = MatrixOps.mul(P_pred, MatrixOps.transpose(H))
-        var S = MatrixOps.add(MatrixOps.mul(H, PHt), R)
-        var invS = MatrixOps.inverse(S)
-        var K = MatrixOps.mul(PHt, invS)
-
-        // 6. Robust Huber M-estimation (soft gating)
         if (robustUpdate && innovation != null) {
-            val s00 = S[0][0]; val s01 = S[0][1]
-            val s10 = S[1][0]; val s11 = S[1][1]
+            val s00 = HPHt[0][0] + rEff; val s01 = HPHt[0][1]
+            val s10 = HPHt[1][0]; val s11 = HPHt[1][1] + rEff
             val detS = s00 * s11 - s01 * s10
-
             if (abs(detS) > 1e-12) {
-                val y0 = innovation[0]
-                val y1 = innovation[1]
-                val is00 = s11 / detS
-                val is01 = -s01 / detS
-                val is10 = -s10 / detS
-                val is11 = s00 / detS
-
-                val quadForm = y0 * (is00 * y0 + is10 * y1) + y1 * (is01 * y0 + is11 * y1)
-                val u = sqrt(max(0.0, quadForm))
-
-                if (u > huberThreshold) {
-                    val huberScale = u / huberThreshold
-                    rEff = (rEff * huberScale).coerceIn(1.0, 50_000.0)
-                    R = MatrixOps.diagonal(doubleArrayOf(rEff, rEff))
-                    PHt = MatrixOps.mul(P_pred, MatrixOps.transpose(H))
-                    S = MatrixOps.add(MatrixOps.mul(H, PHt), R)
-                    invS = MatrixOps.inverse(S)
-                    K = MatrixOps.mul(PHt, invS)
-                }
+                val y0 = innovation[0]; val y1 = innovation[1]
+                val quad = (y0 * (s11 * y0 - s10 * y1) + y1 * (s00 * y1 - s01 * y0)) / detS
+                val u = sqrt(max(0.0, quad))
+                if (u > huberThreshold) rEff *= u / huberThreshold
             }
         }
 
-        // 7. Joseph form posterior covariance for guaranteed positive semi-definiteness
-        val dim = P_pred.size
-        val I = MatrixOps.identity(dim)
-        val IKH = MatrixOps.sub(I, MatrixOps.mul(K, H))
+        val R = MatrixOps.diagonal(doubleArrayOf(rEff, rEff))
+        val K = MatrixOps.mul(PHt, MatrixOps.inverse(MatrixOps.add(HPHt, R)))
+
+        val IKH = MatrixOps.sub(MatrixOps.identity(P_pred.size), MatrixOps.mul(K, H))
         val term1 = MatrixOps.mul(MatrixOps.mul(IKH, P_pred), MatrixOps.transpose(IKH))
         val term2 = MatrixOps.mul(MatrixOps.mul(K, R), MatrixOps.transpose(K))
-        val P_post = MatrixOps.symmetrise(MatrixOps.add(term1, term2))
-
-        return GainResult(K, P_post, R)
+        return GainResult(K, MatrixOps.symmetrise(MatrixOps.add(term1, term2)), R)
     }
 
     override fun onInnovation(
@@ -141,38 +92,38 @@ class NeuralResidualNoiseStrategy(
         H: Array<DoubleArray>,
         P_pred: Array<DoubleArray>
     ) {
-        onInnovation(innovation)
-    }
-
-    fun onInnovation(innovation: DoubleArray) {
         val mag = hypot(innovation[0], innovation[1])
-        if (!mag.isNaN() && !mag.isInfinite()) {
-            nuHistory[nuHead] = mag
-            nuHead = (nuHead + 1) % HISTORY_CAPACITY
-            if (nuCount < HISTORY_CAPACITY) nuCount++
-        }
+        if (!mag.isFinite()) return
+        nuHistory[nuHead] = mag
+        nuHead = (nuHead + 1) % HISTORY_CAPACITY
+        if (nuCount < HISTORY_CAPACITY) nuCount++
     }
 
     override fun reset() {
         nuHead = 0
         nuCount = 0
+        lastDelta = 0.0
     }
 
-    private fun computeInnovationStats(): Pair<Double, Double> {
-        if (nuCount == 0) return 0.0 to 0.0
-        var sum = 0.0
-        for (i in 0 until nuCount) {
-            sum += nuHistory[i]
+    private fun fillFeatures(obs: Observation, P_pred: Array<DoubleArray>, clampedAcc: Double) {
+        var mean = 0.0
+        var std = 0.0
+        if (nuCount > 0) {
+            for (i in 0 until nuCount) mean += nuHistory[i]
+            mean /= nuCount
+            for (i in 0 until nuCount) { val d = nuHistory[i] - mean; std += d * d }
+            std = sqrt(std / nuCount)
         }
-        val mean = sum / nuCount
-        if (nuCount < 2) return mean to 0.0
+        lastFeatures[0] = ln(clampedAcc)
+        lastFeatures[1] = ln(1.0 + mean)
+        lastFeatures[2] = ln(1.0 + std)
+        lastFeatures[3] = if (obs.hasSpeed) obs.speed.toDouble() else 0.0
+        lastFeatures[4] = ln(sqrt((P_pred[0][0] + P_pred[1][1]).coerceAtLeast(0.01)))
+    }
 
-        var sumSq = 0.0
-        for (i in 0 until nuCount) {
-            val d = nuHistory[i] - mean
-            sumSq += d * d
-        }
-        val std = sqrt(sumSq / nuCount)
-        return mean to std
+    private companion object {
+        const val HISTORY_CAPACITY = 10
+        const val MIN_DELTA = -1.0
+        const val MAX_DELTA = 2.5
     }
 }
