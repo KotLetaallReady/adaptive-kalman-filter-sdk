@@ -25,6 +25,8 @@ package com.katka.model
  * @property speedAccuracy Estimated speed accuracy in metres per second, or `0f` when unavailable.
  * @property bearingAccuracy Estimated bearing accuracy in degrees, or `0f` when unavailable.
  * @property provider Name of the location provider that produced the GPS fix.
+ * @property satellitesCount Satellites used in the fix (GnssStatus), or `0` when unknown.
+ * @property meanCn0 Mean C/N0 of those satellites in dB-Hz, or `0f` when unknown.
  */
 data class Observation(
     val timestamp: Long,

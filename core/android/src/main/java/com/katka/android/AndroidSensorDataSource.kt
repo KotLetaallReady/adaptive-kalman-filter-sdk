@@ -6,9 +6,11 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.location.GnssStatus
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Build
+import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import com.google.android.gms.common.ConnectionResult
@@ -91,8 +93,27 @@ class AndroidSensorDataSource(
     @Volatile private var yawCorrectionSin: Double = 0.0
     @Volatile private var isYawAligned: Boolean = false
 
+    @Volatile private var satellitesUsed: Int = 0
+    @Volatile private var meanCn0Used: Float = 0f
+
     override var isRunning: Boolean = false
         private set
+
+    /** Keeps the number of satellites used in the fix and their mean C/N0 for the next observation. */
+    private val gnssStatusCallback = object : GnssStatus.Callback() {
+        override fun onSatelliteStatusChanged(status: GnssStatus) {
+            var used = 0
+            var cn0Sum = 0f
+            for (i in 0 until status.satelliteCount) {
+                if (status.usedInFix(i)) {
+                    used++
+                    cn0Sum += status.getCn0DbHz(i)
+                }
+            }
+            satellitesUsed = used
+            meanCn0Used = if (used > 0) cn0Sum / used else 0f
+        }
+    }
 
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
@@ -130,7 +151,9 @@ class AndroidSensorDataSource(
                 hasRotation     = rotValid,
                 speedAccuracy   = speedAcc,
                 bearingAccuracy = bearingAcc,
-                provider        = location.provider ?: "fused"
+                provider        = location.provider ?: "fused",
+                satellitesCount = satellitesUsed,
+                meanCn0         = meanCn0Used
             )
             _observations.tryEmit(observation)
         }
@@ -171,7 +194,9 @@ class AndroidSensorDataSource(
                 hasRotation     = rotValid,
                 speedAccuracy   = speedAcc,
                 bearingAccuracy = bearingAcc,
-                provider        = location.provider ?: "gps"
+                provider        = location.provider ?: "gps",
+                satellitesCount = satellitesUsed,
+                meanCn0         = meanCn0Used
             )
             _observations.tryEmit(observation)
         }
@@ -245,6 +270,12 @@ class AndroidSensorDataSource(
 
         if (hasGms) startWithFused() else startWithLocationManager()
 
+        try {
+            locationManager.registerGnssStatusCallback(gnssStatusCallback, Handler(Looper.getMainLooper()))
+        } catch (_: SecurityException) {
+            // Without fine location there is no satellite status; observations keep 0 / 0f.
+        }
+
         sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)?.let { sensor ->
             sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_GAME)
         }
@@ -300,6 +331,7 @@ class AndroidSensorDataSource(
 
         fusedClient.removeLocationUpdates(locationCallback)
         locationManager.removeUpdates(fallbackListener)
+        locationManager.unregisterGnssStatusCallback(gnssStatusCallback)
         sensorManager.unregisterListener(this)
 
         hasImu               = false
@@ -308,6 +340,8 @@ class AndroidSensorDataSource(
         isYawAligned         = false
         yawCorrectionCos     = 1.0
         yawCorrectionSin     = 0.0
+        satellitesUsed       = 0
+        meanCn0Used          = 0f
         isRunning            = false
     }
 }
