@@ -286,8 +286,9 @@ class KalmanFilter(
 
     /**
      * Doppler update. With a bearing: speed and course as a velocity vector, covariance through the
-     * polar->cartesian Jacobian. Speed only: an EKF update of |v| along the current heading. Slow, or
-     * no heading yet: the speed bounds the velocity, so it is pulled to zero with variance s² + σs².
+     * polar->cartesian Jacobian. Slow: the speed bounds the velocity, so it is pulled to zero with
+     * variance s² + σs². Fast without a bearing: skipped, since a speed along a guessed heading
+     * can push the filter off the road in a turn.
      */
     private fun updateVelocity(
         currentState: KalmanState,
@@ -324,10 +325,7 @@ class KalmanFilter(
             ))
         }
 
-        val vNorm = hypot(currentState.vx, currentState.vy)
-        if (!obs.hasBearing && s > SLOW_SPEED_MS && vNorm > SLOW_SPEED_MS) {
-            return speedMagnitudeUpdate(currentState, s, sa * sa, vNorm)
-        }
+        if (!obs.hasBearing && s > SLOW_SPEED_MS) return currentState
 
         val vVar = (s * s + sa * sa).coerceAtLeast(0.01)
         return velocityVectorUpdate(currentState, 0.0, 0.0, arrayOf(
@@ -384,37 +382,6 @@ class KalmanFilter(
         val term1 = MatrixOps.mul(MatrixOps.mul(IKH, P), MatrixOps.transpose(IKH))
         val term2 = MatrixOps.mul(MatrixOps.mul(K, Rv), MatrixOps.transpose(K))
         val Pnew = MatrixOps.symmetrise(MatrixOps.add(term1, term2))
-
-        return KalmanState(x = xNew[0], y = xNew[1], vx = xNew[2], vy = xNew[3], P = Pnew)
-    }
-
-    /** Scalar EKF update of the speed |v| = s, linearised at the current heading. */
-    private fun speedMagnitudeUpdate(
-        currentState: KalmanState,
-        s: Double,
-        sVar: Double,
-        vNorm: Double
-    ): KalmanState {
-        val x = currentState.toVector()
-        val P = currentState.P
-        val hx = x[2] / vNorm
-        val hy = x[3] / vNorm
-
-        val S = hx * hx * P[2][2] + 2 * hx * hy * P[2][3] + hy * hy * P[3][3] + sVar
-        if (S < 1e-12) return currentState
-        val K = DoubleArray(KalmanState.DIM) { r -> (P[r][2] * hx + P[r][3] * hy) / S }
-        val y = s - vNorm
-
-        val xNew = DoubleArray(KalmanState.DIM) { r -> x[r] + K[r] * y }
-        clampSpeed(xNew)
-
-        val IKH = MatrixOps.identity(KalmanState.DIM)
-        for (r in 0 until KalmanState.DIM) {
-            IKH[r][2] -= K[r] * hx
-            IKH[r][3] -= K[r] * hy
-        }
-        val term1 = MatrixOps.mul(MatrixOps.mul(IKH, P), MatrixOps.transpose(IKH))
-        val Pnew = MatrixOps.symmetrise(MatrixOps.add(term1, MatrixOps.scale(MatrixOps.outerProduct(K, K), sVar)))
 
         return KalmanState(x = xNew[0], y = xNew[1], vx = xNew[2], vy = xNew[3], P = Pnew)
     }

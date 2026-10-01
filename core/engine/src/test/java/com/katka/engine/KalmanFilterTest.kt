@@ -323,13 +323,14 @@ class KalmanFilterTest {
     }
 
     @Test
-    fun doppler_speedWithoutBearing_keepsTheVelocity() {
+    fun doppler_fastFixWithoutBearing_isNotPulledToZero() {
+        // Speed without a course used to act as "velocity ≈ 0 ± s" and slowed a moving target.
         val track = carEast(10.0, bearing = false)
         val withSpeed = KalmanFilter(useWallClockTime = false, useDoppler = true).run(track)
         val positionOnly = KalmanFilter(useWallClockTime = false, useDoppler = false).run(track)
 
-        assertEquals(10.0, withSpeed.last().state.vx, 0.5)
-        assertTrue(rmseEast(withSpeed, 10.0) < rmseEast(positionOnly, 10.0))
+        assertEquals(10.0, withSpeed.last().state.vx, 1.0)
+        assertEquals(rmseEast(positionOnly, 10.0), rmseEast(withSpeed, 10.0), 1e-9)
     }
 
     @Test
