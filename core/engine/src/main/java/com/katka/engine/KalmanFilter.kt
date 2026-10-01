@@ -18,12 +18,18 @@ import kotlin.math.*
  * @param useWallClockTime `true` cross-checks the time step against the system clock (live
  * stream); `false` takes it only from [Observation.timestamp], which makes replays deterministic.
  * @param useDoppler `true` fuses GNSS Doppler speed and bearing when reported in observations.
+ * @param maxSpeedMs Upper bound on the estimated speed, in m/s; a guard against divergence, not a motion model.
  */
 class KalmanFilter(
     val processNoiseStd: Double = 0.5,
     private val useWallClockTime: Boolean = true,
-    val useDoppler: Boolean = false
+    val useDoppler: Boolean = false,
+    val maxSpeedMs: Double = DEFAULT_MAX_SPEED_MS
 ) {
+    init {
+        require(maxSpeedMs > 0.0) { "maxSpeedMs must be positive, got $maxSpeedMs" }
+    }
+
     private var state: KalmanState? = null
     private var lastTimestamp: Long = -1L
     private var lastWallClockMs: Long = -1L
@@ -150,9 +156,7 @@ class KalmanFilter(
         val xPredVec = xPred.toVector()
         val xNew     = DoubleArray(KalmanState.DIM) { i -> xPredVec[i] + Ky[i] }
 
-        val maxSpeedMs = 15.0
-        xNew[2] = xNew[2].coerceIn(-maxSpeedMs, maxSpeedMs)
-        xNew[3] = xNew[3].coerceIn(-maxSpeedMs, maxSpeedMs)
+        clampSpeed(xNew)
 
         var posterior = KalmanState(
             x  = xNew[0], y  = xNew[1],
@@ -280,6 +284,11 @@ class KalmanFilter(
         return xPred to PPred
     }
 
+    /**
+     * Doppler update. With a bearing: speed and course as a velocity vector, covariance through the
+     * polar->cartesian Jacobian. Speed only: an EKF update of |v| along the current heading. Slow, or
+     * no heading yet: the speed bounds the velocity, so it is pulled to zero with variance s² + σs².
+     */
     private fun updateVelocity(
         currentState: KalmanState,
         obs: Observation
@@ -287,10 +296,7 @@ class KalmanFilter(
         val s = obs.speed.toDouble()
         val sa = if (obs.speedAccuracy > 0.05f) obs.speedAccuracy.toDouble() else 0.25
 
-        val zv: DoubleArray
-        val Rv: Array<DoubleArray>
-
-        if (obs.hasBearing && s > 0.5) {
+        if (obs.hasBearing && s > SLOW_SPEED_MS) {
             val psi = wrapAngle(Math.toRadians(90.0 - obs.bearing.toDouble()))
             val cosPsi = cos(psi)
             val sinPsi = sin(psi)
@@ -300,8 +306,6 @@ class KalmanFilter(
             } else {
                 (sa / s).coerceIn(0.02, PI / 2)
             }
-
-            zv = doubleArrayOf(s * cosPsi, s * sinPsi)
 
             val j00 = cosPsi
             val j01 = -s * sinPsi
@@ -314,25 +318,35 @@ class KalmanFilter(
             val r00 = j00 * j00 * sVar + j01 * j01 * bVar + 1e-6
             val r01 = j00 * j10 * sVar + j01 * j11 * bVar
             val r11 = j10 * j10 * sVar + j11 * j11 * bVar + 1e-6
-
-            Rv = arrayOf(
+            return velocityVectorUpdate(currentState, s * cosPsi, s * sinPsi, arrayOf(
                 doubleArrayOf(r00, r01),
                 doubleArrayOf(r01, r11)
-            )
-        } else {
-            val vVar = (s * s + sa * sa).coerceAtLeast(0.01)
-            zv = doubleArrayOf(0.0, 0.0)
-            Rv = arrayOf(
-                doubleArrayOf(vVar, 0.0),
-                doubleArrayOf(0.0, vVar)
-            )
+            ))
         }
 
+        val vNorm = hypot(currentState.vx, currentState.vy)
+        if (!obs.hasBearing && s > SLOW_SPEED_MS && vNorm > SLOW_SPEED_MS) {
+            return speedMagnitudeUpdate(currentState, s, sa * sa, vNorm)
+        }
+
+        val vVar = (s * s + sa * sa).coerceAtLeast(0.01)
+        return velocityVectorUpdate(currentState, 0.0, 0.0, arrayOf(
+            doubleArrayOf(vVar, 0.0),
+            doubleArrayOf(0.0, vVar)
+        ))
+    }
+
+    private fun velocityVectorUpdate(
+        currentState: KalmanState,
+        zvx: Double,
+        zvy: Double,
+        Rv: Array<DoubleArray>
+    ): KalmanState {
         val x = currentState.toVector()
         val P = currentState.P
 
-        val y0 = zv[0] - x[2]
-        val y1 = zv[1] - x[3]
+        val y0 = zvx - x[2]
+        val y1 = zvy - x[3]
 
         val s00 = P[2][2] + Rv[0][0]
         val s01 = P[2][3] + Rv[0][1]
@@ -359,10 +373,7 @@ class KalmanFilter(
         val xNew = DoubleArray(KalmanState.DIM) { r ->
             x[r] + K[r][0] * y0 + K[r][1] * y1
         }
-
-        val maxSpeedMs = 15.0
-        xNew[2] = xNew[2].coerceIn(-maxSpeedMs, maxSpeedMs)
-        xNew[3] = xNew[3].coerceIn(-maxSpeedMs, maxSpeedMs)
+        clampSpeed(xNew)
 
         val IKH = MatrixOps.identity(KalmanState.DIM)
         for (r in 0 until KalmanState.DIM) {
@@ -374,13 +385,48 @@ class KalmanFilter(
         val term2 = MatrixOps.mul(MatrixOps.mul(K, Rv), MatrixOps.transpose(K))
         val Pnew = MatrixOps.symmetrise(MatrixOps.add(term1, term2))
 
-        return KalmanState(
-            x = xNew[0],
-            y = xNew[1],
-            vx = xNew[2],
-            vy = xNew[3],
-            P = Pnew
-        )
+        return KalmanState(x = xNew[0], y = xNew[1], vx = xNew[2], vy = xNew[3], P = Pnew)
+    }
+
+    /** Scalar EKF update of the speed |v| = s, linearised at the current heading. */
+    private fun speedMagnitudeUpdate(
+        currentState: KalmanState,
+        s: Double,
+        sVar: Double,
+        vNorm: Double
+    ): KalmanState {
+        val x = currentState.toVector()
+        val P = currentState.P
+        val hx = x[2] / vNorm
+        val hy = x[3] / vNorm
+
+        val S = hx * hx * P[2][2] + 2 * hx * hy * P[2][3] + hy * hy * P[3][3] + sVar
+        if (S < 1e-12) return currentState
+        val K = DoubleArray(KalmanState.DIM) { r -> (P[r][2] * hx + P[r][3] * hy) / S }
+        val y = s - vNorm
+
+        val xNew = DoubleArray(KalmanState.DIM) { r -> x[r] + K[r] * y }
+        clampSpeed(xNew)
+
+        val IKH = MatrixOps.identity(KalmanState.DIM)
+        for (r in 0 until KalmanState.DIM) {
+            IKH[r][2] -= K[r] * hx
+            IKH[r][3] -= K[r] * hy
+        }
+        val term1 = MatrixOps.mul(MatrixOps.mul(IKH, P), MatrixOps.transpose(IKH))
+        val Pnew = MatrixOps.symmetrise(MatrixOps.add(term1, MatrixOps.scale(MatrixOps.outerProduct(K, K), sVar)))
+
+        return KalmanState(x = xNew[0], y = xNew[1], vx = xNew[2], vy = xNew[3], P = Pnew)
+    }
+
+    /** Scales the velocity in [v] (indices 2, 3) down to [maxSpeedMs], keeping its direction. */
+    private fun clampSpeed(v: DoubleArray) {
+        val speed = hypot(v[2], v[3])
+        if (speed > maxSpeedMs) {
+            val k = maxSpeedMs / speed
+            v[2] *= k
+            v[3] *= k
+        }
     }
 
     private fun wrapAngle(rad: Double): Double =
@@ -391,5 +437,11 @@ class KalmanFilter(
 
         /** Gated fixes skipped in a row before the next one is accepted anyway. */
         const val GATE_RECOVERY_REJECTIONS = 3
+
+        /** Default bound on the estimated speed: 70 m/s (252 km/h) covers cars as well as walking. */
+        const val DEFAULT_MAX_SPEED_MS = 70.0
+
+        /** Below this speed (m/s) the GNSS course is unreliable, so Doppler only damps the velocity. */
+        private const val SLOW_SPEED_MS = 0.5
     }
 }

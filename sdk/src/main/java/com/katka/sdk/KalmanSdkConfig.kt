@@ -22,6 +22,7 @@ data class KalmanSdkConfig(
     val logcatTag: String = "KalmanLog",
     val useWallClockTime: Boolean = true,
     val useDoppler: Boolean = true,
+    val maxSpeedMs: Double = com.katka.engine.KalmanFilter.DEFAULT_MAX_SPEED_MS,
     val rtsLag: Int = 5,
     val enableRtsSmoother: Boolean = true,
     val robustUpdate: Boolean = true,
@@ -40,6 +41,7 @@ data class KalmanSdkConfig(
         require(smootherModelFileName.isNotBlank()) { "smootherModelFileName must not be blank." }
         require(logcatTag.isNotBlank()) { "logcatTag must not be blank." }
         require(rtsLag >= 0) { "rtsLag must be non-negative." }
+        require(maxSpeedMs > 0.0) { "maxSpeedMs must be positive." }
         require(huberThreshold > 0.0) { "huberThreshold must be positive." }
     }
 }

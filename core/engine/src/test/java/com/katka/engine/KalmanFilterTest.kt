@@ -294,6 +294,56 @@ class KalmanFilterTest {
         }
     }
 
+    /** Car driving east at [speed] m/s with 3 m GPS noise and Doppler; [bearing] false drops the course. */
+    private fun carEast(speed: Double, n: Int = 200, bearing: Boolean = true): List<Observation> {
+        val rng = Random(5)
+        return (0 until n).map { i ->
+            fixWithDoppler(
+                i * 1000L, speed * i + 3.0 * rng.nextGaussian(), 3.0 * rng.nextGaussian(),
+                speed = (speed + 0.2 * rng.nextGaussian()).toFloat(), bearing = 90f
+            ).copy(hasBearing = bearing)
+        }
+    }
+
+    private fun rmseEast(results: List<FilterResult>, speed: Double, skip: Int = 20): Double {
+        val tail = results.drop(skip)
+        return kotlin.math.sqrt(tail.withIndex().sumOf { (k, r) ->
+            val dx = r.state.x - speed * (k + skip); dx * dx + r.state.y * r.state.y
+        } / tail.size)
+    }
+
+    @Test
+    fun doppler_tracksCarAboveTheOldPerAxisLimit() {
+        for (speed in listOf(20.0, 30.0)) {
+            val results = KalmanFilter(useWallClockTime = false, useDoppler = true).run(carEast(speed))
+            assertTrue("RMSE at $speed m/s: ${rmseEast(results, speed)}", rmseEast(results, speed) < 3.0)
+            assertEquals(0, results.drop(20).count { it.isRejected })
+            assertEquals(speed, results.last().state.vx, 0.5)
+        }
+    }
+
+    @Test
+    fun doppler_speedWithoutBearing_keepsTheVelocity() {
+        val track = carEast(10.0, bearing = false)
+        val withSpeed = KalmanFilter(useWallClockTime = false, useDoppler = true).run(track)
+        val positionOnly = KalmanFilter(useWallClockTime = false, useDoppler = false).run(track)
+
+        assertEquals(10.0, withSpeed.last().state.vx, 0.5)
+        assertTrue(rmseEast(withSpeed, 10.0) < rmseEast(positionOnly, 10.0))
+    }
+
+    @Test
+    fun maxSpeed_boundsTheSpeedNotEachAxis() {
+        val rng = Random(9)
+        val track = (0 until 60).map { i ->
+            val d = 10.0 * i / kotlin.math.sqrt(2.0)
+            fixWithDoppler(i * 1000L, d + rng.nextGaussian(), d + rng.nextGaussian(), speed = 10f, bearing = 45f)
+        }
+        val results = KalmanFilter(useWallClockTime = false, useDoppler = true, maxSpeedMs = 8.0).run(track)
+        for (r in results) assertTrue(kotlin.math.hypot(r.state.vx, r.state.vy) <= 8.0 + 1e-9)
+        assertEquals(results.last().state.vx, results.last().state.vy, 0.5)
+    }
+
     private companion object {
         const val EARTH_RADIUS_M = 6_371_000.0
     }

@@ -132,7 +132,7 @@ class AdaptiveKalmanFilterSdk private constructor(
             logger: Logger = Logger.NoOp,
             smootherStore: SmootherStore? = null,
             strategy: CoefficientStrategy = config.createStrategy(),
-            filter: KalmanFilter = KalmanFilter(config.processNoiseStd, config.useWallClockTime, config.useDoppler)
+            filter: KalmanFilter = KalmanFilter(config.processNoiseStd, config.useWallClockTime, config.useDoppler, config.maxSpeedMs)
         ): AdaptiveKalmanFilterSdk {
             val rtsSmoother = if (config.enableRtsSmoother) FixedLagRtsSmoother(config.rtsLag) else null
             val coordinator = KalmanFilterCoordinator(
